@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>1MALLAlipay</key>
+	<string>200</string>
+	<key>1MALLTenPay</key>
+	<string>201</string>
+	<key>1MALLMBank</key>
+	<string>202</string>
+	<key>1MALLCUP</key>
+	<string>203</string>
+	<key>1STOREAlipay</key>
+	<string>400</string>
+	<key>1STORETenPay</key>
+	<string>401</string>
+	<key>1STOREMBank</key>
+	<string>402</string>
+	<key>1STORECUP</key>
+	<string>403</string>
+	<key>1STOREMobilePay</key>
+	<string>404</string>
+	<key>1STOREALIX</key>
+	<string>421</string>
+</dict>
+</plist>

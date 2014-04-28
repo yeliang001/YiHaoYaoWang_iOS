@@ -1,0 +1,392 @@
+//
+//  ShareToSinaMicroBlog.m
+//  TheStoreApp
+//
+//  Created by linyy on 11-6-13.
+//  Copyright 2011年 vsc. All rights reserved.
+//
+
+#import "ShareToSinaMicroBlog.h"
+#import "GlobalValue.h"
+#import "SinaUtil.h"
+#import "NSData+Base64.h"
+#import "MicroBlogService.h"
+#import "OTSAlertView.h"
+
+#define SHARE_BUTTON_TRANSMIT_VALUE 15
+#define SINA_USER_NAME_TAG 1
+#define SINA_PASSWORD_TAG 2
+#define SHARE_PRODUCT_TO_BLOG_STATUS 700
+#define SHARE_ORDER_TO_BLOG_STATUS 701
+#define SHARE_MESSAGE_TO_BLOG_STATUS 702
+#define SHARE_SINA_TEXT_FIELD_TAG 4002
+
+@implementation ShareToSinaMicroBlog
+
+-(id)init{
+
+    return self;
+}
+
+#pragma mark 分享到新浪、产品
+-(void)shareSina:(NSString *)pName price:(NSString *)pPrice productId:(NSString *)pId{
+    orderStatus=SHARE_PRODUCT_TO_BLOG_STATUS;
+    [self doShareSina:pName price:pPrice productId:pId];
+}
+
+#pragma mark 分享到新浪、订单
+-(void)shareSinaOrder:(NSString *)pName price:(NSString *)pPrice productId:(NSString *)pId{
+    orderStatus=SHARE_ORDER_TO_BLOG_STATUS;
+    [self doShareSina:pName price:pPrice productId:pId];
+}
+
+#pragma mark 分享到新浪、消息
+-(void)shareSinaMessage:(NSString *)messageContent{
+    orderStatus=SHARE_MESSAGE_TO_BLOG_STATUS;
+    [self doShareSina:messageContent price:nil productId:nil];
+}
+
+-(void)doShareSina:(NSString *)pName price:(NSString *)pPrice productId:(NSString *)pId{
+	if(blogService==nil){
+		blogService=[[MicroBlogService alloc] init];
+	}
+    cnName=pName;
+    priced=pPrice;
+    productIded=pId;
+    [[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+    if([GlobalValue getGlobalValueInstance].sinaUserName!=nil && [GlobalValue getGlobalValueInstance].sinaPassword!=nil){
+        if([self landUser:[GlobalValue getGlobalValueInstance].sinaUserName pass:[GlobalValue getGlobalValueInstance].sinaPassword]){
+            [self showSina];
+            return;
+        }
+    }
+	if(sinaAlert==nil){
+		sinaAlert = [[OTSAlertView alloc] initWithTitle:nil 
+										   message:@"\n\n\n\n\n\n" 
+										  delegate:self 
+								 cancelButtonTitle:nil
+								 otherButtonTitles: nil];
+	}
+	[sinaAlert setBackgroundColor:[UIColor clearColor]];
+	[sinaAlert setTag:10];
+	
+	UIButton * cloaseSinaBtn=[[UIButton alloc] initWithFrame:CGRectMake(250, -15, 43, 43)];
+	[cloaseSinaBtn addTarget:self action:@selector(closeKeyBoard:) forControlEvents:UIControlEventTouchUpInside];
+	
+	UIButton * delImg=[[UIButton alloc] initWithFrame:CGRectMake(10, 10, 23, 23)];
+	[delImg setBackgroundImage:[UIImage imageNamed:@"del_sina.png"] forState:UIControlStateNormal];
+	[delImg setUserInteractionEnabled:NO];
+	[cloaseSinaBtn addSubview:delImg];
+	[delImg release];
+	[sinaAlert addSubview:cloaseSinaBtn];
+    [cloaseSinaBtn release];
+	
+	/*UIButton * delButton=[[UIButton alloc] initWithFrame:CGRectMake(260, -10, 23, 23)];						//关闭输入框
+	[delButton setBackgroundImage:[UIImage imageNamed:@"del_sina.png"] forState:UIControlStateNormal];
+	[delButton addTarget:self action:@selector(closeKeyBoard:) forControlEvents:UIControlEventTouchUpInside];
+	delButton.tag=1;
+	[sinaAlert addSubview:delButton];
+    [delButton release];*/
+    
+	UILabel * alertTitle=[[UILabel alloc] initWithFrame:CGRectMake(20, 15, 250, 20)];						//alert标题
+	alertTitle.text=@"登录到新浪微博分享";
+	alertTitle.textColor=[UIColor whiteColor];
+	alertTitle.backgroundColor=[UIColor clearColor];
+	[sinaAlert addSubview:alertTitle];
+	[alertTitle release];
+	
+	if(userName==nil){
+		userName=[[UITextField alloc] initWithFrame:CGRectMake(20, 50, 250, 35)];								//用户名称输入框
+	}
+	userName.backgroundColor=[UIColor whiteColor];
+	userName.returnKeyType=UIReturnKeyNext;
+	userName.placeholder=@"邮箱/会员帐号/手机号";
+	userName.delegate=self;
+	userName.tag=SINA_USER_NAME_TAG;
+	[sinaAlert addSubview:userName];
+	//[userName release];
+	
+	if(userPassword==nil){
+		userPassword=[[UITextField alloc] initWithFrame:CGRectMake(20, 100, 250, 35)];							//密码输入框
+	}
+	userPassword.backgroundColor=[UIColor whiteColor];
+	userPassword.secureTextEntry=YES;
+	userPassword.returnKeyType=UIReturnKeyDone;
+	userPassword.placeholder=@"请输入密码";
+	userPassword.delegate=self;
+	userPassword.tag=SINA_PASSWORD_TAG;
+	[userPassword becomeFirstResponder];
+	[sinaAlert addSubview:userPassword];
+	//[userPassword release];
+	
+	UIButton *landButton=[[UIButton alloc] initWithFrame:CGRectMake(150, 150, 120, 40)];					//登录按钮
+	[landButton setTitle:@"登录" forState:UIControlStateNormal];
+	[landButton setBackgroundImage:[UIImage imageNamed:@"land_sina.png"] forState:UIControlStateNormal];
+	landButton.tag=2;
+	[landButton addTarget:self action:@selector(closeKeyBoard:) forControlEvents:UIControlEventTouchUpInside];
+	[sinaAlert addSubview:landButton];
+	[landButton release];
+	[sinaAlert show];
+	[userName becomeFirstResponder];
+
+}
+
+#pragma mark 键盘响应事件
+-(BOOL)textFieldShouldReturn:(UITextField *)textField{
+	if (textField.tag==SINA_USER_NAME_TAG) {
+		[userName resignFirstResponder];
+		[userPassword becomeFirstResponder];
+	}else {
+		[sinaAlert dismissWithClickedButtonIndex:0 animated:YES];
+		NSString *user=[userName.text stringByReplacingOccurrencesOfString:@" " withString:@""];//清空字符串
+		NSString *pass=[userPassword.text stringByReplacingOccurrencesOfString:@" " withString:@""];
+		if ([user length]>0 && [pass length]>0) {																//如果输入框里都有字符
+			BOOL isSuccess=[self landUser:userName.text pass:userPassword.text];
+			if (isSuccess) {																					//如果登录成功
+                [[GlobalValue getGlobalValueInstance] setSinaUserName:[NSString stringWithString:userName.text]];
+                [[GlobalValue getGlobalValueInstance] setSinaPassword:[NSString stringWithString:userPassword.text]]; 
+                [self showSina];
+			}else {																								//如果登录失败
+                [[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+				UIAlertView *alert=[[OTSAlertView alloc] initWithTitle:nil 
+															  message:@"用户名或者密码错误！" 
+															 delegate:self 
+													cancelButtonTitle:@"确定" 
+													otherButtonTitles:nil];
+				[alert show];
+				[alert release];
+				[userName setText:@""];
+				[userPassword setText:@""];
+				[GlobalValue getGlobalValueInstance].sinaUserName=nil;
+				[GlobalValue getGlobalValueInstance].sinaPassword=nil;
+			}			
+		}else {																									//如果输入框有一个为空
+            [[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+			UIAlertView *alert=[[OTSAlertView alloc] initWithTitle:nil 
+														  message:@"用户名或者密码不能为空" 
+														 delegate:self 
+												cancelButtonTitle:@"确定" 
+												otherButtonTitles:nil];
+			[alert show];
+			[alert release];
+			alert=nil;
+			[userName setText:@""];
+			[userPassword setText:@""];
+		}
+	}
+	return YES;
+}
+
+#pragma mark 关闭键盘
+-(void)closeKeyBoard:(id)sender{
+	[sinaAlert dismissWithClickedButtonIndex:0 animated:YES];
+	UIButton *button=(UIButton *)sender;
+	if (button.tag==2) {
+		NSString *user=[userName.text stringByReplacingOccurrencesOfString:@" " withString:@""];//清空字符串
+		NSString *pass=[userPassword.text stringByReplacingOccurrencesOfString:@" " withString:@""];
+		if ([user length]>0&&[pass length]>0) {
+			BOOL isSuccess=[self landUser:userName.text pass:userPassword.text];
+			
+			if (isSuccess) {
+                [[GlobalValue getGlobalValueInstance] setSinaUserName:[NSString stringWithString:userName.text]];
+                [[GlobalValue getGlobalValueInstance] setSinaPassword:[NSString stringWithString:userPassword.text]];
+				[self showSina];
+			}else {
+                [[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+				UIAlertView *alert=[[OTSAlertView alloc] initWithTitle:nil 
+															  message:@"用户名或者密码错误！" 
+															 delegate:self 
+													cancelButtonTitle:@"确定" 
+													otherButtonTitles:nil];
+				[alert setTag:190];
+				[alert show];
+				[alert release];
+				alert=nil;
+				[userName setText:@""];
+				[userPassword setText:@""];
+				return;
+			}
+			//[weibo release];			
+		}else {
+            [[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+			UIAlertView *alert=[[OTSAlertView alloc] initWithTitle:nil 
+														  message:@"用户名或者密码不能为空" 
+														 delegate:self 
+												cancelButtonTitle:@"确定" 
+												otherButtonTitles:nil];
+			[alert setTag:200];
+			[alert show];
+			[alert release];
+			alert=nil;
+			[userName setText:@""];
+			[userPassword setText:@""];
+			[GlobalValue getGlobalValueInstance].sinaUserName=nil;
+			[GlobalValue getGlobalValueInstance].sinaPassword=nil;
+			return;
+		}
+	}
+	if (button.tag==3) {//分享到新浪微博		
+		NSString *name=[NSString stringWithFormat:@"%@",cnName];//获得商品名称
+		NSString *price=[NSString stringWithFormat:@"%@",priced];//获得商品价格
+		NSString *productId=[NSString stringWithFormat:@"%@",productIded];//获得商品id
+        content=nil;
+        switch (orderStatus) {
+            case SHARE_PRODUCT_TO_BLOG_STATUS:
+                content = [NSString stringWithFormat:
+                           @"我在1号药店发现了%@，%@元，快来抢购吧！http://m.yihaodian.com/p/%@_%@_7551389（@1号药店，轻松享受一站式网上购物)",
+                           name, price, productId, [GlobalValue getGlobalValueInstance].provinceId];
+                break;
+            case SHARE_ORDER_TO_BLOG_STATUS:
+                content = [NSString stringWithFormat:
+                           @"我在 @1号药店 发现了%@，￥%@元，快来抢购吧！http://m.yihaodian.com/p/%@_%@_755138（一站式拇指购物）",
+                           name, price, productId, [GlobalValue getGlobalValueInstance].provinceId];
+                break;
+            case SHARE_MESSAGE_TO_BLOG_STATUS:
+                content=[NSString stringWithString:name];
+                break;
+            default:
+                break;
+        }
+        
+		/*NSURL *url=[sinaUtil getAuthUrlWithData];
+		[sinaUtil postString:content withUrl:url];*/
+        content=shareText.text;
+		/*if([content length]>140){
+			UIAlertView *alert=[[OTSAlertView alloc] initWithTitle:nil 
+														  message:@"微博太长，请确认不超过140个字符" 
+														 delegate:self 
+												cancelButtonTitle:@"确定" 
+												otherButtonTitles:nil];
+			[alert show];
+			[alert release];
+		}*/
+        [blogService sharePublish:[GlobalValue getGlobalValueInstance].sinaUserName password:[GlobalValue getGlobalValueInstance].sinaPassword targetId:1l comment:content guid:nil syncs:nil];
+	}
+}
+
+#pragma mark 分享到新浪弹出框
+-(void)showSina{
+    [[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+	if(sinaAlert!=nil){
+		sinaAlert = [[OTSAlertView alloc] initWithTitle:nil 
+										   message:@"\n\n\n\n\n\n" 
+										  delegate:self 
+								 cancelButtonTitle:nil
+								 otherButtonTitles: nil];
+	}
+	
+	UIButton * cloaseSinaBtn=[[UIButton alloc] initWithFrame:CGRectMake(250, -15, 43, 43)];
+	[cloaseSinaBtn addTarget:self action:@selector(closeKeyBoard:) forControlEvents:UIControlEventTouchUpInside];
+	
+	UIButton * delImg=[[UIButton alloc] initWithFrame:CGRectMake(10, 10, 23, 23)];
+	[delImg setBackgroundImage:[UIImage imageNamed:@"del_sina.png"] forState:UIControlStateNormal];
+	[delImg setUserInteractionEnabled:NO];
+	[cloaseSinaBtn addSubview:delImg];
+	[delImg release];
+	[sinaAlert addSubview:cloaseSinaBtn];
+    [cloaseSinaBtn release];
+	
+	
+	/*
+	UIButton * delButton=[[UIButton alloc] initWithFrame:CGRectMake(260, -10, 23, 23)];//关闭新浪微博右上交的按钮
+	[delButton setBackgroundImage:[UIImage imageNamed:@"del_sina.png"] forState:UIControlStateNormal];
+	[delButton addTarget:self action:@selector(closeKeyBoard:) forControlEvents:UIControlEventTouchUpInside];
+	[sinaAlert addSubview:delButton];
+    [delButton release];*/
+	
+	UIButton * sinaLogo=[[UIButton alloc] initWithFrame:CGRectMake(20, 5, 32, 32)];
+	[sinaLogo setBackgroundImage:[UIImage imageNamed:@"sina_logo.png"] forState:UIControlStateNormal];
+	
+	[sinaAlert addSubview:sinaLogo];
+    [sinaLogo release];
+	
+	UILabel *alertLabel=[[UILabel alloc] initWithFrame:CGRectMake(55, 15, 250, 20)];
+	[alertLabel setBackgroundColor:[UIColor clearColor]];//分享title
+	[alertLabel setText:@"分享到新浪微博"];
+	[alertLabel setTextColor:[UIColor whiteColor]];
+	[sinaAlert addSubview:alertLabel];
+    [alertLabel release];
+	
+	NSString *name=[NSString stringWithFormat:@"%@",cnName];						//获得商品名称
+	NSString *price=[NSString stringWithFormat:@"%@",priced];						//获得商品价格
+	NSString *productId=[NSString stringWithFormat:@"%@",productIded];				//获得商品id
+	content=nil;
+    switch (orderStatus) {
+        case SHARE_PRODUCT_TO_BLOG_STATUS:
+            content = [NSString stringWithFormat:
+                       @"我在1号药店发现了%@，%@元，快来抢购吧！http://m.yihaodian.com/p/%@_%@_7551389（@1号药店，轻松享受一站式网上购物)",
+                       name, price, productId, [GlobalValue getGlobalValueInstance].provinceId];
+            break;
+        case SHARE_ORDER_TO_BLOG_STATUS:
+            content = [NSString stringWithFormat:
+                       @"我在 @1号药店 发现了%@，￥%@元，快来抢购吧！http://m.yihaodian.com/p/%@_%@_755138（一站式拇指购物）",
+                       name, price, productId, [GlobalValue getGlobalValueInstance].provinceId];
+            break;
+        case SHARE_MESSAGE_TO_BLOG_STATUS:
+            content=[NSString stringWithString:name];
+            break;
+        default:
+            break;
+    }
+	
+	if(shareText==nil){
+		shareText=[[UITextView alloc] initWithFrame:CGRectMake(20, 50, 250, 90)];		//用户名称输入框
+	}
+	shareText.backgroundColor=[UIColor whiteColor];
+	shareText.text=content;
+	shareText.tag=SHARE_SINA_TEXT_FIELD_TAG;
+	[shareText setDelegate:self];
+	[sinaAlert addSubview:shareText];
+	//[shareText release];
+	
+	if(contentLength==nil){
+		contentLength=[[UILabel alloc] initWithFrame:CGRectMake(20, 150, 120, 20)];		//字数
+	}
+	contentLength.text=[NSString stringWithFormat:@"%d",[shareText.text length]];
+	[contentLength setBackgroundColor:[UIColor clearColor]];
+	[contentLength setTextColor:[UIColor whiteColor]];
+	[sinaAlert addSubview:contentLength];
+    //[contentLength release];
+	
+	UIButton * landButton=[[UIButton alloc] initWithFrame:CGRectMake(150, 150, 120, 40)];		//分享按钮
+	[landButton setTitle:@"分享" forState:UIControlStateNormal];
+	[landButton setBackgroundImage:[UIImage imageNamed:@"land_sina.png"] forState:UIControlStateNormal];
+	landButton.tag=3;
+	[landButton addTarget:self action:@selector(closeKeyBoard:) forControlEvents:UIControlEventTouchUpInside];
+	[sinaAlert addSubview:landButton];
+	[landButton release];
+	
+	[sinaAlert show];
+	//[sinaAlert release];
+}
+
+#pragma mark 判断用户是否登录成功
+-(BOOL)landUser:(NSString *)name pass:(NSString *)password{
+	if([blogService shareCheck:name password:password targetId:1l]==1){
+        return YES;
+    }
+	return NO;
+}
+
+- (void)textViewDidChange:(UITextView *)textView{
+	switch (textView.tag) {
+		case SHARE_SINA_TEXT_FIELD_TAG:
+			[contentLength setText:[NSString stringWithFormat:@"%d",[shareText.text length]]];
+			break;
+		default:
+			break;
+	}
+		
+}
+
+-(void)dealloc{
+    [userName release];
+    [userPassword release];
+    if(blogService!=nil){
+        [blogService release];
+    }
+    //[sinaUtil release];
+    [super dealloc];
+}
+
+@end

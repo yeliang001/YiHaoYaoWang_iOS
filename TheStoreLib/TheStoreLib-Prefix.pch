@@ -1,0 +1,13 @@
+//
+// Prefix header for all source files of the 'TheStoreLib' target in the 'TheStoreLib' project
+//
+
+#ifdef __OBJC__
+#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
+#endif
+
+
+#import "OTSEverybodyWantsMe.h"
+#import "OTSBaseViewController.h"
+

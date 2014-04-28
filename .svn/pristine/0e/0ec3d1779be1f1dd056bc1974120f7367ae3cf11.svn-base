@@ -1,0 +1,39 @@
+//
+//  OTSProductDetail.h
+//  TheStoreApp
+//
+//  Created by jiming huang on 12-10-29.
+//  Copyright (c) 2012年 __MyCompanyName__. All rights reserved.
+//
+#import <UIKit/UIKit.h>
+#import "OTSTabView.h"
+#import "OTSAnimationTableView.h"
+#import "OTSInterestedProducts.h"
+#import "OTSEverybodyWantsMe.h"
+#import "OTSProductView.h"
+#import "PhoneCartViewController.h"
+@class ProductInfo;
+@class OTSInterestedProducts;
+
+
+@interface OTSProductDetail : OTSBaseViewController<UITableViewDelegate,UITableViewDataSource,OTSTabViewDelegate,ProductTopViewDelegate,OTSAnimationTableViewDelegate,OTSInterestedProductsDelegate,UIActionSheetDelegate> {
+    long m_ProductId;
+    NSString *m_PromotionId;
+    OTSProductDetailFromTag m_FromTag;
+    ProductInfo *m_ProductDetailVO;
+    int m_ThreadStatus;
+    BOOL m_ThreadRunning;
+    OTSInterestedProducts *m_InterestedProducts;
+    UIScrollView *m_ScrollView;
+    BOOL m_AddingFavorite;
+    int m_AddFavoriteResult;
+    OTSTabView *m_TabView;
+    BOOL pointIn;
+    UIViewController*  superVC;
+}
+@property(assign)BOOL pointIn;
+@property (retain) NSNumber *promotionPrice;
+@property(retain)UIViewController*  superVC;
+-(id)initWithProductVO:(ProductInfo *)productVo fromTag:(OTSProductDetailFromTag)fromTag;
+-(id)initWithProductId:(long)productId promotionId:(NSString *)promotionId fromTag:(OTSProductDetailFromTag)fromTag;
+@end

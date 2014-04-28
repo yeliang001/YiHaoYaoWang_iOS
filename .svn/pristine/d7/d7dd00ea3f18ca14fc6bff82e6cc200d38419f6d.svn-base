@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+	<dict>
+		<key>playName</key>
+		<string>热点问题:</string>
+		<key>quotations</key>
+		<array>
+			<dict>
+				<key>question</key>
+				<string>认证支付过程中，系统返回手机号验证失败的原因？</string>
+				<key>quotation</key>
+				<string>认证支付使用的手机号码，必须为支付的银行卡号在银行预留的手机号码；请确认您使用的手机号是否为银行预留的正确的手机号码，或请与您的银行联系，先更改银行预留的手机号码。</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>支付或绑卡过程中，系统返回卡认证失败的原因？</string>
+				<key>quotation</key>
+				<string>首先请您先确认输入过程中没有出现输入错误；其次请核对您所使用的银行卡是否在支持银行范围内。</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>如果我以前在银行留的手机已经停用了，怎么办？</string>
+				<key>quotation</key>
+				<string>您需要联系您的银行更新您的手机号码，完成&quot;银行卡|手机号码&quot;的关联。如果您已经用于关联某张银行卡的手机号码停机或失效了，您除了需要联系您的银行进行绑定手机变更外，您还需要对您的&quot;银联账户|银行卡&quot;解除原有关联关系并用更新后的手机号码进行重新关联。</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>在查询我已关联的银行卡时，页面显示的&quot;默认卡&quot;是什么意思？</string>
+				<key>quotation</key>
+				<string>默认卡是指您在进行快捷支付时默认使用的卡，如果仅能关联一张卡的话，那么关联的卡片即默认卡。设定默认卡，仅在开放多卡关联时才有意义。</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>支付限额说明：</string>
+				<key>quotation</key>
+				<string>认证支付：实际可支付金额因商户不同而有所不同，同时受银行限额限制。
+ 快捷支付：实际可支付金额因商户不同而有所不同，同时受银行限额限制。
+ s储值卡支付：卡内金额。</string>
+			</dict>
+		</array>
+	</dict>
+	<dict>
+		<key>playName</key>
+		<string>银行支持范围（来源：银联在线支付官网）：</string>
+		<key>quotations</key>
+		<array>
+			<dict>
+				<key>question</key>
+				<string>A-E</string>
+				<key>quotation</key>
+				<string>包商银行（仅信用卡）
+北京银行（仅信用卡）
+成都农村商业银行（仅信用卡）
+重庆农村商业银行（仅信用卡）
+常熟农村商业银行（仅信用卡）
+长沙银行（仅信用卡）
+承德银行（仅信用卡）
+重庆银行（仅信用卡）
+大连银行（仅信用卡）
+东营市商业银行（仅信用卡）
+东亚银行（仅信用卡）
+鄂尔多斯银行（仅借记卡）</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>F-J</string>
+				<key>quotation</key>
+				<string>福建省农村信用社（仅信用卡）
+光大银行（借记卡）
+广发银行（信用卡）
+广州银行（信用卡）
+广州农村商业银行（信用卡）
+贵阳银行（仅信用卡）
+杭州银行股份有限公司（仅信用卡）
+河北银行（仅信用卡） 
+哈尔滨银行（仅信用卡）
+海南省农村信用社联合社（仅借记卡）
+湖南省农村信用社联合社（仅信用卡）
+花旗银行（仅借记卡）
+徽商银行（仅信用卡）
+华夏银行（仅信用卡）
+嘉兴银行（借记卡）
+交通银行（信用卡）
+江苏银行（仅信用卡）
+江阴农村商业银行（仅信用卡） 
+晋中市商业银行（借记卡）
+锦州银行（仅信用卡）
+九江银行（所有卡）</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>K-O</string>
+				<key>quotation</key>
+				<string>龙江银行（仅信用卡）
+兰州银行（仅信用卡）
+民生银行（仅信用卡）
+内蒙古银行（仅借记卡）
+内蒙古农村信用社（仅借记卡）
+宁波银行（仅信用卡）</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>P-T</string>
+				<key>quotation</key>
+				<string>平安银行（信用卡）      
+浦发银行（仅信用卡）
+青海银行（仅信用卡）
+上海农商银行（仅信用卡）
+上海银行（仅借记卡）
+上饶银行（仅信用卡）
+顺德农村商业银行(仅信用卡)
+山西省临汾市尧都区信用合作联社(所有卡)
+山西省农村信用社联合社(借记卡)
+台州银行(信用卡)</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>U-Z</string>
+				<key>quotation</key>
+				<string>潍坊银行(仅信用卡)
+威海市商业银行(仅信用卡)
+无锡农村商业银行(仅信用卡)
+温州银行(仅信用卡)
+乌鲁木齐市商业银行(仅信用卡)
+兴业银行仅信用卡(仅信用卡)
+宜昌市商业银行(仅信用卡)
+鄞州银行(仅信用卡)
+招商银行(仅信用卡)
+中国工商银行(快捷支付：借记卡)
+中国建设银行(所有卡)
+中国农业银行(所有卡仅借记卡)
+中国银行(仅信用卡)
+中国邮政储蓄银行(所有卡)
+中信银行(仅信用卡)
+浙江稠州商业银行(所有卡)
+浙江民泰商业银行(信用卡)
+浙江泰隆商业银行(仅信用卡)</string>
+			</dict>
+		</array>
+	</dict>
+	<dict>
+		<key>playName</key>
+		<string>交易管理：</string>
+		<key>quotations</key>
+		<array>
+			<dict>
+				<key>question</key>
+				<string>各种支付方式有什么差异？</string>
+				<key>quotation</key>
+				<string>银联手机在线支付提供以下几种支付方式：
+■认证支付：在银联的支付页面使用&quot;银行卡信息+手机号码&quot;的组合信息进行支付的方式。 
+■快捷支付：注册用户在银联的支付页面使用&quot;银联账户信息+手机号码&quot;的组合信息进行支付的方式。 
+■储值卡支付：直接使用储值卡号、密码支付。 </string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>使用认证支付的注意事项？</string>
+				<key>quotation</key>
+				<string>使用认证支付和关联银行卡前必须确认您在银行已预留有效手机号码。因为信用卡在申请时大多都已在银行留下手机号码了，因此对使用信用卡支付的用户来说，在银行预留手机号不是问题。如果您使用借记卡支付，需要通过开通银行的服务项目预留手机号码</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>如何开通快捷支付？</string>
+				<key>quotation</key>
+				<string>如果您是第一次使用快捷支付，并且在此之间未绑定过银行卡，则系统将引导您注册及进入银行卡绑定页面，绑定后回到在交易管理，对其进行支付</string>
+			</dict>
+		</array>
+	</dict>
+	<dict>
+		<key>playName</key>
+		<string>用户管理：</string>
+		<key>quotations</key>
+		<array>
+			<dict>
+				<key>question</key>
+				<string>注册时绑定的手机号，必须为银行预留的手机号码吗？</string>
+				<key>quotation</key>
+				<string>注册账户是为快捷支付进行服务的，所绑定的手机号不需要为银行预留的手机号码，但是在您绑定银行卡时，需要对绑定的银行卡号及该银行卡银行预留的手机号码进行验证，因此建议您使用常用的手机号或银行预留的手机号码进行注册。</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>如何修改登录密码？</string>
+				<key>quotation</key>
+				<string>您可以进入&quot;我的信息&quot;，点击&quot;修改密码&quot;栏目进行修改。</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>如何修改绑定手机号码？</string>
+				<key>quotation</key>
+				<string>您可以进入&quot;我的信息&quot;，点击&quot;修改手机号码&quot;栏目进行修改。</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>忘记登录密码怎么办？</string>
+				<key>quotation</key>
+				<string>您可以通过您注册时填写的手机号码、安全问题及安全问题答案找回密码。
+1、点击用户管理登录界面的&quot;忘记密码&quot;按钮，进入密码重置界面，填入用户名、手机号码和短信验证码，点击&quot;下一步&quot;
+2、 输入预设的安全问题答案，输入两遍新密码
+3、 成功重置密码</string>
+			</dict>
+		</array>
+	</dict>
+	<dict>
+		<key>playName</key>
+		<string>银行卡管理：</string>
+		<key>quotations</key>
+		<array>
+			<dict>
+				<key>question</key>
+				<string>什么是&quot;银行卡信息&quot;？</string>
+				<key>quotation</key>
+				<string>&quot;银行卡信息&quot;仅支持注册用户使用。&quot;银行卡信息&quot;包含以下两个功能：
+■关联银行卡：在快捷支付使用中，为了减少持卡人输入银行卡号和卡密码的次数，减少敏感信息泄露的风险，银联提供&quot;账户|银行卡&quot;的关联功能，在支付时您可以不用再输入卡号和密码，仅凭手机验证码即可支付。
+■解除卡关联：解除&quot;账户|银行卡&quot;间的关联关系。
+■查询余额：提供借记卡的余额查询</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>关联银行卡有什么好处？</string>
+				<key>quotation</key>
+				<string>使用关联的银行卡支付可以更方便，也减少了敏感信息的输入次数。</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>如何关联银行卡？</string>
+				<key>quotation</key>
+				<string>在&quot;银行卡信息&quot;页面的&quot;添加银行卡关联&quot;栏目中，选择您的卡类型（借记卡或信用卡），根据页面的信息要求填入相关信息。注意此处的绑定手机号必须与您在您的银行预留的绑定手机号一致。</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>如何解除关联的银行卡？</string>
+				<key>quotation</key>
+				<string>在&quot;银行卡信息&quot;页面的&quot;已绑定的银行卡&quot;栏目中，在您要解除关联的银行卡那行，点击&quot;解除关联&quot;即可。</string>
+			</dict>
+			<dict>
+				<key>question</key>
+				<string>我可以关联别人的银行卡么？</string>
+				<key>quotation</key>
+				<string>在通过了卡信息的验证后，可以关联他人的银行卡。</string>
+			</dict>
+		</array>
+	</dict>
+</array>
+</plist>

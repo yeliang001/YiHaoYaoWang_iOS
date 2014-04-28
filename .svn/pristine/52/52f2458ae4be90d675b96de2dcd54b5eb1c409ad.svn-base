@@ -1,0 +1,403 @@
+Engineering Requirements Document
+		
+
+2	设计 
+2.1	对现有设计分析
+[大部分项目是在现有功能上修改, 因此对现有功能分析非常重要, 要说明对现有功能的理解, 技术流程,用到的数据库表以及关键字段的用法.]
+2.2	新需求相关的设计
+2.2.1	接口的设计
+2.2.1.1	游戏流程接口
+
+
+=================================1
+    /**
+	 * <h2>创建一个游戏</h2><br/>
+	 * 功能点：摇摇购首页-要种游戏并点击开启游戏;<br/>
+	 * 必填参数：token<br/> 
+	 * 返回值：Integer<br/> 
+	 * @param token
+	 * @return 创建成功标示
+	 * 返回1：成功；0：失败；-1：服务器内部错误
+	 */
+	public Integer createRockGame(String token);
+	
+    =================================2
+	/**
+	 * <h2>根据用户ID查询游戏</h2><br/>
+	 * 功能点：摇摇购首页或玩游戏页面;<br/>
+	 * 必填参数：token <br/> 
+	 * 返回值：RockGameVO<br/> 
+	 * @param token
+	 * @return 摇摇购游戏对象
+	 */
+public RockGameVO getRockGameByToken(String token);
+
+	public class RockGameVO {
+	
+	private Long id;
+	
+	/**
+	 * 用户ID
+	 */
+	private Long userId;
+	
+	/**
+	 * 游戏状态：1-已完成；0-未完成
+	 */
+	private Integer gameStatus;
+	
+	/**
+	 * 创建时间
+	 */
+	private Date createTime;
+	
+	/**
+	 * 修改时间
+	 */
+	private Date updateTime;
+}
+2.2.1.2	一起摇游戏用户选择邀请对象
+
+=================================3
+    /**
+	 * <h2>获取将要赠送的商品列表</h2><br/>
+	 * 功能点：摇摇购选择赠送商品页面;<br/>
+	 * 必填参数：token <br/> 
+	 * 返回值：List<MobileCentralRockGameProductVO><br/> 
+	 * @param token
+	 * @return 摇摇购赠送商品的集合
+	 */
+	public List<RockGameProductVO> getPresentsByToken(String token,Integer currentPage,Integer pageSize);
+
+public class RockGameProductVO {
+
+	private Long id;
+	
+	/**
+	 * 商家
+	 */
+	private String merchantId;
+	
+	/**
+	 * 商品编码
+	 */
+	private String productCode;
+	
+	/**
+	 * landingPageID
+	 */
+	private Long landingPageId;
+	
+	/**
+	 * 抵用券ID
+	 */
+	private Long ticketId;
+	
+	/**
+	 * 正确答案
+	 */
+	private String rightCode;
+	
+	/**
+	 * 错误答案：多个错误答案用逗号分开
+	 */
+	private String wrongCode;
+	
+	/**
+	 * 开始时间
+	 */
+	private Date startTime;
+	
+	/**
+	 * 结束时间
+	 */
+	private Date endTime;
+}
+
+=================================	4
+	/**
+	 * <h2>创建一个游戏流程</h2><br/>
+	 * 功能点：玩游戏选择手机好友发送游戏;<br/>
+	 * 必填参数：token,rockGameFlowVO<br/> 
+	 * 返回值：Integer<br/> 
+	 * @param token
+	 * @param rockGameFlowVO	游戏流程对象
+	 * @return 1：成功；0：失败；-1：服务器内部错误
+	 */
+	public Integer createRockGameFlow(String token,RockGameFlowVO rockGameFlowVO);
+2.2.1.3	被邀请用户玩游戏选择商品
+
+=================================5
+    /**
+	 * <h2>获取游戏流程的题目</h2><br/>
+	 * 功能点：摇摇购玩游戏用户答题页面;<br/>
+	 * 必填参数：rockGameFlowID<br/> 
+	 * 返回值：RockGameProductVO<br/> 
+	 * @param rockGameFlowID	游戏流程ID
+	 * @return 游戏所赠送的商品对象
+	 */
+	public RockGameProductVO getRockGameProductVO(Long rockGameFlowID);	
+    
+    
+    =================================6
+	/**
+	 * <h2>检查答题结果</h2><br/>
+	 * 功能点：摇摇购玩游戏用户答题;<br/>
+	 * 必填参数：rockGameFlowID,rockGameProdID,resultCode<br/> 
+	 * 返回值：CheckRockGameResult<br/> 
+	 * @param rockGameFlowID	游戏流程ID
+	 * @param rockGameProdID	题目ID
+	 * @param resultCode	选择的结果
+	 * @return 检查答题结果的对象
+	 */
+	public CheckRockGameResult checkResult(Long rockGameFlowID,Long rockGameProdID,String resultCode);
+
+public class CheckRockGameResult {
+
+	/**
+	 * 答题结果：
+	 * 1-正确；
+	 * 101-答错一次；
+	 * 102-答题失败（答错两次）；
+	 * -1-服务里内部错误
+	 */
+	private Integer resultCode;
+	
+	/**
+	 * 结果描述
+	 */
+	private String resultInfo;
+	
+	/**
+	 * 被猜中的商品详情
+	 */
+	private RockProductV2 rockProductV2;
+}
+
+
+=================================7
+	 /**
+	 * <h2>处理游戏流程</h2><br/>
+	 * 功能点：摇摇购玩游戏;<br/>
+	 * 必填参数：token,rockGameFlowID<br/> 
+	 * 返回值：Integer<br/> 
+	 * @param token
+	 * @param rockGameFlowID	游戏流程ID
+	 * @return 1：成功；0：失败；-1：服务器内部错误
+	 */
+	public Integer processGameFlow(String token,Long rockGameFlowID);
+2.2.1.4	获取摇一摇的结果
+
+
+=================================8
+    /**
+     * <h2>获取摇动手机后的结果</h2><br/>
+     * <br/>
+     * 功能点：新版摇摇购;<br/>
+     * 异常：服务器错误;token错误;<br/>
+     * 必填参数：token,provinceId<br/> 
+     * 返回值：RockResultV2<br/> 
+     * @param trader
+     * @param provinceId 省份id
+     * @param currentPage
+     * @param pageSize
+     * @param token 未登录传""
+     * @return 获取摇动手机后的结果
+     */
+	public RockResultV2 getRockResultV2(Trader trader, Long provinceId,Integer currentPage, Integer pageSize,String token);
+
+相关VO
+
+public class RockResultV2 implements Serializable{
+	
+	/**
+	 * 0-促销商品；1-抵用券；2-游戏；3-普通商品
+	 */
+	private Integer resultType;
+	
+	/**
+	 * 抵用券列表
+	 */
+	private List<RockCouponVO> couponVOList ;
+	
+	/**
+	 * 促销商品列表
+	 */
+	private List<RockProductV2> rockProductV2List;
+	
+	/**
+	 * 普通商品列表
+	 */
+	private List<ProductVO> productVOList;
+}
+
+public class RockProductV2 implements Serializable{
+	
+	/**
+	 * 商品详情
+	 */
+	private ProductVO prodcutVO ;
+	
+	/**
+	 * 商品时效(毫秒)
+	 */
+	private Long productAging;
+	
+	/** 
+	 * 商品是状态：0-未购买；1-已购买；2-已过期
+	 */
+	private Integer rockProductType;
+}
+
+public class RockCouponVO implements Serializable{
+
+	/**
+	 * 抵用券详情
+	 */
+	private CouponVO couponVO;
+	
+	/**
+	 * 活动Id
+	 */
+	private Long activityId;
+
+	/**
+	 * 是否已领取 0-未领取；1-已领取
+	 */
+	private Integer isReceived;
+}
+
+2.2.1.5	获取我的寄存箱
+
+=================================9
+	/**
+     * <h2>获取我的寄存箱</h2><br/>
+     * <br/>
+     * 功能点：新版摇摇购;<br/>
+     * 异常：服务器错误;token错误;<br/>
+     * 必填参数：token<br/> 
+     * 返回值：StorageBoxVO<br/> 
+	 * @param token
+	 * @param type 0-表示查询全部；1-表示促销商品类型为未购买；2-促销商品类型为已购买
+     * @param currentPage
+     * @param pageSize
+	 * @return 同返回
+	 */
+	public List<StorageBoxVO> getMyStorageBoxList(String token,Integer type,Integer currentPage, Integer pageSize);
+
+public class StorageBoxVO implements Serializable{
+
+	/**
+	 * 寄存箱商品类型 0-促销商品；1-抵用券
+	 */
+	private Integer type;
+	
+	/**
+	 * 促销商品列表
+	 */
+	private RockProductV2 rockProductV2;
+	
+	/**
+	 * 抵用券列表
+	 */
+ 	private RockCouponVO rockCouponVO;	
+}
+2.2.1.6	添加商品或抵用券到我的寄存箱
+
+
+=================================10
+	/**
+     * <h2>添加商品或抵用券到我的寄存箱</h2><br/>
+     * <br/>
+     * 功能点：新版摇摇购;<br/>
+     * 异常：服务器错误;token错误;<br/>
+     * 必填参数：token,type<br/> 
+     * 返回值：AddStorageBoxResult<br/> 
+	 * @param token
+	 * @param productId 商品Id
+	 * @param promotionId 促销Id
+	 * @param couponId 抵用券Id
+	 * @param type 0-促销商品；1-抵用券Id
+	 * @return 同返回
+	 */
+	public AddStorageBoxResult  addStorageBox(String token,Long productId,String promotionId,String couponId,Integer type);
+2.2.1.7	通过活动ID添加抵用券到用户
+
+
+=================================11
+    /**
+     * <h2>通过活动Id添加抵用券到用户</h2><br/>
+     * <br/>
+     * 功能点：新版摇一摇通过活动Id添加抵用券到用户;<br/>
+     * 异常：服务器错误;Token错误;<br/>
+     * 返回：AddCouponByActivityIdResult<br/>
+     * 必填参数：token,activityId<br/> 
+     * 返回值：AddCouponByActivityIdResult<br/> 
+	 * @param token
+	 * @param activityId 活动Id
+	 * @return
+	 */
+	public AddCouponByActivityIdResult addCouponByActivityId(String token,Long activityId);
+2.2.1.8	判断摇出的商品是否未结算
+
+=================================12
+	/**
+     * <h2>判断摇出的商品是否未结算</h2><br/>
+     * <br/>
+     * 功能点：新版摇摇购;<br/>
+     * 异常：服务器错误;token错误;<br/>
+     * 必填参数：token,productId,promotionId<br/> 
+     * 返回值：CheckRockResultResult<br/> 
+	 * @param token
+	 * @param productId
+	 * @param promotionId
+	 * @return
+	 */
+	public CheckRockResultResult checkRockResult(String token ,Long productId,String promotionId);
+    
+    
+    =================================
+
+2.2.2	数据流程图
+ 
+2.2.3	类图
+
+2.2.4	时序图
+
+
+2.2.5	数据库设计
+
+
+2.2.6	配置文件变化
+[说明配置文件的路径, 以及变化内容]
+2.2.7	性能方面的考虑
+[比如如何使用cache, 如何避免访问大数据量的表, 如何提升性能等]
+2.2.8	页面重量的考虑
+[考虑如何不增加页面的大小]
+2.2.9	页面缓存的影响
+[主页,频道页,产品详细页是被squid做了页面缓存,如果这些页面出现个性化的内容就要考虑其影响, 一般都要通过ajax来实现缓存页面上的静态内容]
+2.2.10	新增或者变化的URL 
+[URL的格式非常重要，无论从SEO, 运维角度来说都需要有清晰的URL路径规划，比如该放到www.yihaodian.com/usermanger/下面的不能放到其他地方，对历史问题我们要逐步按照http://wiki.yihaodian.cn/mediawiki/index.php/Urlformat这里的要求过度到新格式，对新增的URL需要按照该wiki上的流程申请批准，ERD review时要讲明已经得到批准。 ]
+
+2.2.11	异常处理
+2.2.12	是否影响1haodian Service
+[如果不清楚的话可以咨询做Service的人员，但Service的代码大部分是和前台的代码共享的，相当于Service封装了原有的一些逻辑，比如加入购物车，获得产品信息，下单等，因此一旦有大的调整非常可能导致Service不工作。更多信息参考 ]
+
+2.2.13	受影响的pool
+[这一点非常重要，随着我们线上机器的增多，如何判断一次上线那些机器需要更新代码，那些不需要，我们以pool的概念来规范，对于开发人员，要清楚需要重新部署那些pool,需要重启那些pool,细节问题可以参看: http://wiki.yihaodian.cn/mediawiki/index.php/Pool ]
+
+全部的pool列表： http://wiki.yihaodian.cn/mediawiki/index.php/Pool
+
+过一遍上面的wiki中的内容，然后填写下面表格
+Pool Name	部门	是否需要部署	是否需要重启	需要连带重启的Pool
+前台(1号店)	IT3	是/否	是/否	　
+前台（药网）	IT3	是/否	是/否	　
+前台主页，cms,产品详细页(squid专用tomcat)(1号店)	IT3	是/否	是/否	　
+				
+				
+				
+				
+				
+				
+				
+

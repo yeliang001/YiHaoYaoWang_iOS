@@ -1,0 +1,19 @@
+//
+//  YWUserService.h
+//  TheStoreApp
+//
+//  Created by LinPan on 13-8-14.
+//
+//
+
+#import <Foundation/Foundation.h>
+#import "BaseService.h"
+@class UserInfo;
+@class LoginResultInfo;
+@class RegistResultInfo;
+@interface YWUserService : BaseService
+
+- (LoginResultInfo *)login:(NSDictionary *)paramDic;
+- (RegistResultInfo *)regist:(NSDictionary *)paramDic;
+- (UserInfo *)getUserInfo:(NSDictionary *)paramDic;
+@end

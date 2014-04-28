@@ -1,0 +1,738 @@
+//
+//  OTSOrderMfVC.m
+//  TheStoreApp
+//
+//  Created by yiming dong on 12-7-11.
+//  Copyright (c) 2012年 __MyCompanyName__. All rights reserved.
+//
+
+#import "OTSOrderMfVC.h"
+#import "OTSNaviAnimation.h"
+#import "OTSOrderMfServant.h"
+#import "OrderV2.h"
+#import "OTSLoadingView.h"
+#import "OrderStatusTrackVO.h"
+#import "OrderStatusHeaderVO.h"
+#import "OTSOrderMfStatusTrackListView.h"
+#import "Page.h"
+#import "OTSUtility.h"
+#import "OTSActionSheet.h"
+#import "OTSCopiableLabel.h"
+#import "OrderDetailInfo.h"
+
+#import "OrderPackageInfo.h"
+#import "SplitLogInfo.h"
+#import "YWOrderService.h"
+enum ERequestType
+{
+    KRequestStatusTracking = 0  
+    , KRequestStatusHeaders
+};
+
+#define TAG_CALL_SHEET 1000
+#define HALF_CORNER_DEVIDE  @";"
+#define FULL_CORNER_DEVIDE  @"；"
+
+//================================================================
+
+typedef enum _EOtsMfDataType
+{
+    KOtsMfDataTypeDetault = 0
+    , KOtsMfDataTypePhone               // 电话
+    , KOtsMfDataTypeExpressNumber       // 快递单号
+}EOtsMfDataType;
+
+
+@interface OTSMfData : NSObject 
+@property(nonatomic, copy)      NSString        *data;
+@property(nonatomic, copy)      NSString        *format;
+@property(nonatomic, copy)      NSString        *actionTitle;
+@property(nonatomic, assign)EOtsMfDataType      dataType;
+@end
+
+@implementation OTSMfData
+@synthesize data, format, dataType, actionTitle;
+
+-(void)dealloc
+{
+    [data release];
+    [format release];
+    [actionTitle release];
+    
+    [super dealloc];
+}
+@end
+
+
+//================================================================
+@interface OTSOrderMfVC ()
+-(void)requestAsync:(id)aRequestTypeObj;
+-(OrderStatusHeaderVO*)getLastStatusHeader;
+@end
+
+
+
+@implementation OTSOrderMfVC
+@synthesize theOrder, servant, selectedMfData, materialFlowDatas;
+@synthesize groupLogoIV, orderCodeLbl, orderDateLbl, packNameLbl, packStatusLbl, leftPackBtn, rightPackBtn, packStatusListView, packInfoTV, scrollView;
+@dynamic subPackIndex;
+
+#pragma mark - property
+-(NSUInteger)subPackIndex
+{
+    return subPackIndex;
+}
+
+-(void)setSubPackIndex:(NSUInteger)aSubPackIndex
+{
+    subPackIndex = aSubPackIndex;
+    subPackIndex = MAX(subPackIndex, 0);
+    subPackIndex = MIN(subPackIndex, [theOrder.childOrderList count] - 1);
+}
+
+#pragma mark - helper
+-(void)setHeight:(int)aHeight forView:(UIView*)aView
+{
+    aView.frame = CGRectMake(aView.frame.origin.x, aView.frame.origin.y, aView.frame.size.width, aHeight);
+}
+
+-(void)setX:(int)aX forView:(UIView*)aView
+{
+    aView.frame = CGRectMake(aX, aView.frame.origin.y, aView.frame.size.width, aView.frame.size.height);
+}
+
+-(BOOL)hasSubPackage
+{
+    return _orderDetail && _orderDetail.orderPackageArr && [_orderDetail.orderPackageArr count] > 0;
+}
+
+-(OrderPackageInfo *)subPackageAtIndex:(NSUInteger)aIndex
+{
+    if ([self hasSubPackage] && aIndex < [_orderDetail.orderPackageArr count])
+    {
+        return (OrderPackageInfo*)[_orderDetail.orderPackageArr objectAtIndex:aIndex];
+    }
+    
+    return nil;
+}
+
+-(OrderStatusTrackVO*)lastStatus
+{
+    if (servant.statusTrackPage
+        && servant.statusTrackPage.objList 
+        && [servant.statusTrackPage.objList count] > 0)
+    {
+        return [servant.statusTrackPage.objList objectAtIndex:[servant.statusTrackPage.objList count] - 1];
+    }
+    
+    return nil;
+}
+
+-(BOOL)array:(NSArray*)aArr hasString:(NSString*)aString
+{
+    if (aArr && aString)
+    {
+        for (NSString* str in aArr)
+        {
+            if ([str isEqualToString:aString])
+            {
+                return YES;
+            }
+        }
+    }
+    
+    return NO;
+}
+
+-(NSString*)phoneExtractedFromStatusTrack
+{
+    NSMutableString* phoneString = [NSMutableString string];
+    
+    if (servant.statusTrackPage 
+        && servant.statusTrackPage.objList)
+    {
+        NSMutableArray* phones = [NSMutableArray arrayWithCapacity:4];
+        
+        NSArray* statusTracks = servant.statusTrackPage.objList;
+        int statusCount = [statusTracks count];
+        for (int i = statusCount - 1; i >= 0; i--)
+        {
+            OrderStatusTrackVO* statusTrack = [statusTracks objectAtIndex:i];
+            NSString* remark = statusTrack.oprRemark;
+            //NSString* remark = [NSString stringWithFormat:@"大声的健康哈萨克的空间上打瞌睡打瞌睡的电话021-8877665%d哈哈99", i];
+            
+            if (remark)
+            {
+                NSString* searchStr = @"电话";
+                NSRange range = [remark rangeOfString:searchStr];
+                
+                DebugLog(@"remark:%@", remark);
+                
+                if (range.location != NSNotFound)
+                {
+                    remark = [remark substringFromIndex:range.location + [searchStr length]];
+                    
+                    if (remark && [remark length] > 0)
+                    {
+                        NSMutableString* digits = [NSMutableString string];
+                        for (int i = 0; i < [remark length]; i++)
+                        {
+                            unichar ch = [remark characterAtIndex:i];
+                            if (isdigit(ch) || ch == '-') 
+                            {
+                                [digits appendFormat:@"%c", ch];
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        
+                         DebugLog(@"digits:%@", digits);
+                        
+                        if ([digits length] > 5)    // 假设大于5的数字为有效电话号码
+                        {
+                            if (![self array:phones hasString:digits])
+                            {
+                                [phones addObject:digits];
+                            }
+                        }
+                    }
+
+                }
+            }
+        }
+        
+        for (NSString* str in phones)
+        {
+            if ([phoneString length] > 0)
+            {
+                [phoneString appendString:HALF_CORNER_DEVIDE];
+            }
+            
+            [phoneString appendString:str];
+        }
+    }
+    
+    return [phoneString length] > 0 ? phoneString : nil;
+}
+
+-(void)updatePackChangeBtnState
+{
+    leftPackBtn.hidden = rightPackBtn.hidden = !_orderDetail.orderPackageArr.count > 2;
+    
+    if (!leftPackBtn.hidden)
+    {
+        leftPackBtn.enabled = rightPackBtn.enabled = NO;
+        
+        if (subPackIndex > 0)
+        {
+            leftPackBtn.enabled = YES;
+        }
+        
+        if (subPackIndex < [_orderDetail.orderPackageArr count] - 1)
+        {
+            rightPackBtn.enabled = YES;
+        }
+        
+        if (!leftPackBtn.enabled && !rightPackBtn.enabled)
+        {
+            leftPackBtn.hidden = rightPackBtn.hidden = YES;
+        }
+    }
+
+}
+
+-(IBAction)prevPackAction:(id)sender
+{
+    subPackIndex--;
+    subPackIndex = subPackIndex > 0 ? subPackIndex : 0;
+
+    [self updateUI:nil];
+//    [self requestAsync:[NSNumber numberWithInt:KRequestStatusTracking]];
+}
+
+-(IBAction)nextPackAction:(id)sender
+{
+    subPackIndex++;
+    subPackIndex = subPackIndex < [_orderDetail.orderPackageArr count] ? subPackIndex : [_orderDetail.orderPackageArr count] - 1;
+
+    [self updateUI:nil];
+//    [self requestAsync:[NSNumber numberWithInt:KRequestStatusTracking]];
+}
+
+#pragma mark - real request
+
+-(void)requestStatusTracking
+{
+    
+    YWOrderService *oSer = [[YWOrderService alloc] init];
+    _orderDetail = [[oSer getOrderDetail:_orderId] retain];
+    self.subPackIndex = 0;
+//    
+//    if ([self hasSubPackage]) 
+//    {
+//        subPackIndex = subPackIndex < [theOrder.childOrderList count] ? subPackIndex : 0;
+//        OrderV2* subPack = (OrderV2*)[theOrder.childOrderList objectAtIndex:subPackIndex];
+//        if (subPack)
+//        {
+//            [servant requestOrderStatus:[subPack.orderId longLongValue]];
+//        }
+//    }
+//    else
+//    {
+//        [servant requestOrderStatus:[theOrder.orderId longLongValue]];
+//    }
+}
+
+-(void)requestStatusHeaders
+{
+    if ([self hasSubPackage]) 
+    {
+        subPackIndex = subPackIndex < [theOrder.childOrderList count] ? subPackIndex : 0;
+        OrderV2* subPack = (OrderV2*)[theOrder.childOrderList objectAtIndex:subPackIndex];
+        if (subPack)
+        {
+            [servant requestOrderStatusHeader:[subPack.orderId longLongValue]];
+        }
+    }
+    else
+    {
+        [servant requestOrderStatusHeader:[theOrder.orderId longLongValue]];
+    }
+}
+
+#pragma mark - UI
+-(void)doUpdateUI
+{
+//    OrderV2* order = nil;
+    OrderPackageInfo *package = nil;
+    BOOL hasSubPackage = [self hasSubPackage];
+    
+    if (hasSubPackage) 
+    {
+        package = [self subPackageAtIndex:subPackIndex];
+        
+    }
+//    else
+//    {
+//        order = theOrder;
+//    }
+    
+    //
+    [self updatePackChangeBtnState];
+    
+    //
+//    int orderType = [theOrder.orderType intValue];
+    // NOTICE: orderType from group buy order is nil indeed, so ...
+    //BOOL isGroupBuyOrder = (orderType == 2) || theOrder.orderType == nil;
+//    BOOL isGroupBuyOrder = (orderType == 2);
+    groupLogoIV.hidden = YES; //!isGroupBuyOrder;
+    
+    // 订单编号
+    orderCodeLbl.text = _orderDetail.orderId;
+//    if (groupLogoIV.hidden)
+//    {
+//        [self setX:groupLogoIV.frame.origin.x forView:orderCodeLbl];
+//    }
+//    else
+//    {
+//        [self setX:10 forView:orderCodeLbl];
+//    }
+    
+    //
+    packNameLbl.hidden = !hasSubPackage;
+    if (!packNameLbl.hidden) 
+    {
+        packNameLbl.text = [NSString stringWithFormat:@"包裹%@", [OTSUtility chineseForDigit:subPackIndex + 1]];
+    }
+    
+    packStatusLbl.text = _orderDetail.orderStatusName; //order.orderStatusForString;
+
+    
+    // 下单时间
+    orderDateLbl.text = [NSString stringWithFormat:@"%@ 下单", _orderDetail.orderDate];
+    
+    [[packStatusListView viewWithTag:OTS_MAGIC_TAG_NUMBER] removeFromSuperview];
+//    if (servant.statusTrackPage.objList && [servant.statusTrackPage.objList count] > 0) 
+    {
+        OTSOrderMfStatusTrackListView* statusView = [[[OTSOrderMfStatusTrackListView alloc] initWithFrame:packStatusListView.bounds] autorelease];
+        statusView.tag = OTS_MAGIC_TAG_NUMBER;
+
+        statusView.statusTracks = package.splitLogArr; //servant.statusTrackPage.objList;
+        
+        [packStatusListView addSubview:statusView];
+        [self setHeight:statusView.frame.size.height + 15 forView:packStatusListView];
+        
+        packStatusListView.hidden = NO;
+    }
+
+    
+    
+    // relayout tv
+    CGRect rect = packInfoTV.frame;
+    rect.origin.y = CGRectGetMaxY(packStatusListView.frame);
+    packInfoTV.frame = rect;
+    
+    // update scroll view content size
+    CGRect packInfoRc = packInfoTV.frame;
+    scrollView.contentSize = CGSizeMake(scrollView.contentSize.width, CGRectGetMaxY(packInfoRc));
+    
+    [self.view viewWithTag:999].hidden = YES;
+}
+
+#pragma mark - thread
+-(void)requestAsync:(id)aRequestTypeObj
+{
+    [[OTSGlobalLoadingView sharedInstance] showInView:self.view];
+    [self otsDetatchMemorySafeNewThreadSelector:@selector(threadMain:) toTarget:self withObject:aRequestTypeObj];
+}
+
+-(void)threadMain:(id)aRequestTypeObj
+{
+    int type = [aRequestTypeObj intValue];
+    switch (type)
+    {
+        case KRequestStatusTracking:
+        {
+            [self requestStatusTracking];
+        }
+            break;
+            
+        case KRequestStatusHeaders:
+        {
+            [self requestStatusHeaders];
+        }
+            break;
+            
+            //
+            
+        default:
+            break;
+    }
+    [self performSelectorOnMainThread:@selector(updateUI:) withObject:aRequestTypeObj waitUntilDone:YES];
+}
+
+-(void)updateUI:(id)aRequestTypeObj
+{
+    [[OTSGlobalLoadingView sharedInstance] hide];
+    
+//    int type = [aRequestTypeObj intValue];
+//    switch (type)
+//    {
+//        case KRequestStatusTracking:
+//        {
+//            [self requestAsync:[NSNumber numberWithInt:KRequestStatusHeaders]];
+//        }
+//            break;
+//            
+//        case KRequestStatusHeaders:
+//        {
+            [self doUpdateUI];
+            [packInfoTV reloadData];
+//        }
+            
+//        default:
+//            break;
+//    }
+    
+}
+
+#pragma mark - action
+-(IBAction)naviBackAction:(id)sender
+{
+    [self.view.superview.layer addAnimation:[OTSNaviAnimation animationPushFromLeft] forKey:@"whatever"];
+    [self removeSelf];
+}
+
+
+
+#pragma mark - tv data source
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    if (section == 0) 
+    {
+        if (materialFlowDatas == nil)
+        {
+            self.materialFlowDatas = [NSMutableArray arrayWithCapacity:4];
+        }
+        [materialFlowDatas removeAllObjects];
+        
+        OrderStatusHeaderVO* header = [self getLastStatusHeader];
+        if (header)
+        {
+            if (header.distSuppCompName)
+            {
+                OTSMfData* mfData = [[[OTSMfData alloc] init] autorelease];
+                mfData.data = header.distSuppCompName;
+                mfData.format = @"配送公司：%@";
+                
+                [materialFlowDatas addObject:mfData];
+            }
+            
+            if (header.distSuppPhone)
+            {
+                OTSMfData* mfData = [[[OTSMfData alloc] init] autorelease];
+                
+                mfData.data = header.distSuppPhone; // @"027-88888888;021-77777777;010-11111111";
+                mfData.format = @"配送公司联系电话：%@";
+                mfData.actionTitle = @"拨打配送公司电话";
+                mfData.dataType = KOtsMfDataTypePhone;
+                
+                [materialFlowDatas addObject:mfData];
+            }
+            
+
+            header.distSuppLinkMan = header.distSuppLinkMan ? header.distSuppLinkMan : [self phoneExtractedFromStatusTrack];
+            if (header.distSuppLinkMan)
+            {
+                OTSMfData* mfData = [[[OTSMfData alloc] init] autorelease];
+                mfData.data = header.distSuppLinkMan;
+                mfData.format = @"快递员电话：%@";
+                mfData.actionTitle = @"拨打快递员电话";
+                mfData.dataType = KOtsMfDataTypePhone;
+                
+                [materialFlowDatas addObject:mfData];
+            }
+            
+            if (header.expressNbr)
+            {
+                OTSMfData* mfData = [[[OTSMfData alloc] init] autorelease];
+                mfData.data = header.expressNbr;
+                mfData.format = @"快递单号：%@";
+                mfData.dataType = KOtsMfDataTypeExpressNumber;
+                
+                [materialFlowDatas addObject:mfData];
+            }
+            
+            return [materialFlowDatas count];
+        }
+    }
+    
+    return 0;
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
+{
+    return 1;
+}
+
+-(OrderStatusHeaderVO*)getLastStatusHeader
+{
+    OrderStatusHeaderVO* header = nil;
+    if (servant.statusHeaders && [servant.statusHeaders count] > 0)
+    {
+        header = (OrderStatusHeaderVO*)[servant.statusHeaders objectAtIndex:0];
+    }
+    
+    return header;
+}
+
+-(NSArray*)arrayWithPhoneString:(NSString*)aPhoneStr
+{
+    if (aPhoneStr)
+    {
+        NSString* seperator = HALF_CORNER_DEVIDE;
+        if ([aPhoneStr rangeOfString:FULL_CORNER_DEVIDE].location != NSNotFound)
+        {
+            seperator = FULL_CORNER_DEVIDE;
+        }
+        
+        return [aPhoneStr componentsSeparatedByString:seperator];
+    }
+    
+    return nil;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    static NSString* cellStr = @"orderMfCell";
+    UITableViewCell* cell = [tableView dequeueReusableCellWithIdentifier:cellStr]; 
+    
+    if (cell == nil)
+    {
+        cell = [[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellStr] autorelease];
+        cell.backgroundColor = [UIColor whiteColor];
+        cell.textLabel.font = [UIFont systemFontOfSize:15.f];
+        cell.selectionStyle=UITableViewCellSelectionStyleBlue;
+    }
+    
+    int row = [indexPath row];
+    int section = [indexPath section];
+        
+    if (section == 0)
+    {
+        OTSMfData* mfData = [materialFlowDatas objectAtIndex:row];
+        if (mfData)
+        {
+            if (mfData.dataType == KOtsMfDataTypePhone)
+            {
+                cell.textLabel.text = [NSString stringWithFormat:mfData.format, [[self arrayWithPhoneString:mfData.data] objectAtIndex:0]];
+                cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+            }
+            else if (mfData.dataType == KOtsMfDataTypeExpressNumber)
+            {
+                cell.textLabel.text = [NSString stringWithFormat:mfData.format, mfData.data];
+                cell.accessoryType = UITableViewCellAccessoryNone;
+            
+                CGRect copyRc = cell.bounds;
+                copyRc.origin.y += 5;
+                copyRc.origin.x += 90;
+                copyRc.size.width -= 90 + 30;
+                copyRc.size.height -= 10 + 5;
+                
+                OTSAdvancedCopiableLabel* copyLabel = [[[OTSAdvancedCopiableLabel alloc] initWithFrame:copyRc] autorelease];
+                copyLabel.textForCopy = mfData.data;
+                copyLabel.backgroundColor = [UIColor clearColor];
+                [cell addSubview:copyLabel];
+            }
+            else
+            {
+                cell.textLabel.text = [NSString stringWithFormat:mfData.format, mfData.data];
+                cell.accessoryType = UITableViewCellAccessoryNone;
+            }
+        }
+    }  
+    
+    return cell;
+}
+
+#pragma mark - tv delegate
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    return 40;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    
+    int row = [indexPath row];
+    int section = [indexPath section];
+
+    if (section == 0)
+    {
+        OTSMfData* mfData = [materialFlowDatas objectAtIndex:row];
+        selectedMfData = mfData;
+        if (mfData && mfData.dataType == KOtsMfDataTypePhone)
+        {
+            if ([mfData.data isEqualToString:OTS_SERVICE_PHONE_NUMBER]) 
+            {
+                mfData.actionTitle = @"客服工作时间 : 每日 9:00-21:00";
+            }
+            
+            
+            
+            UIActionSheet *actionSheet = [[[OTSActionSheet alloc] initWithTitle:mfData.actionTitle 
+                                                                       delegate:self cancelButtonTitle:nil 
+                                                         destructiveButtonTitle:nil 
+                                                              otherButtonTitles:nil] autorelease];
+            NSArray* phones = [self arrayWithPhoneString:mfData.data];
+            
+            for (NSString* phone in phones)
+            {
+                [actionSheet addButtonWithTitle:phone];
+            }
+            [actionSheet addButtonWithTitle:@"取消"];
+            actionSheet.cancelButtonIndex = actionSheet.numberOfButtons - 1;
+            
+            [actionSheet setTag:TAG_CALL_SHEET];
+            [actionSheet showInView:[UIApplication sharedApplication].keyWindow];
+        }
+    }  
+}
+
+#pragma mark - action sheet
+- (void)actionSheet:(UIActionSheet *)actionSheet clickedButtonAtIndex:(NSInteger)buttonIndex
+{
+    DebugLog(@"btn index:%d", buttonIndex);
+    
+    if (selectedMfData.dataType == KOtsMfDataTypePhone && buttonIndex < actionSheet.numberOfButtons - 1)
+    {
+        NSArray* phones = [self arrayWithPhoneString:selectedMfData.data];
+        NSString* phoneNumber = [OTSUtility safeObjectAtIndex:buttonIndex inArray:phones];
+        [OTSUtility callWithPhoneNumber:phoneNumber];
+    }
+}
+
+
+
+#pragma mark -
+- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
+{
+    self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
+    if (self) {
+        // Custom initialization
+    }
+    return self;
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.needQuitWhenLogOut = YES;
+    
+    // iphone5适配 - dym
+    CGRect rc = scrollView.frame;
+    rc.origin.y = OTS_IPHONE_NAVI_BAR_HEIGHT;
+    rc.size.height = self.view.frame.size.height -  OTS_IPHONE_NAVI_BAR_HEIGHT;
+    scrollView.backgroundColor = [UIColor colorWithRed:235 / 255.f green:235 / 255.f blue:235 / 255.f alpha:1];
+    scrollView.frame = rc;
+    
+    self.servant = [[[OTSOrderMfServant alloc] init] autorelease];
+    
+    packStatusListView.layer.cornerRadius = 8;
+    packStatusListView.layer.borderColor = [UIColor lightGrayColor].CGColor;
+    packStatusListView.layer.borderWidth = 1.;
+    
+    packInfoTV.delegate = self;
+    packInfoTV.dataSource = self;
+    packInfoTV.backgroundColor = [UIColor clearColor];
+    [self setHeight:packInfoTV.frame.size.height forView:packInfoTV];
+    packInfoTV.scrollEnabled = NO;
+    
+    CGRect packInfoRc = packInfoTV.frame;
+    CGSize contentSize = CGSizeMake(scrollView.frame.size.width, CGRectGetMaxY(packInfoRc));
+    scrollView.contentSize = contentSize;
+    
+    if (_orderDetail == nil && _orderId)
+    {
+        // 网络请求
+        [self requestAsync:[NSNumber numberWithInt:KRequestStatusTracking]];
+    }
+    else
+    {
+        [self doUpdateUI];
+        [packInfoTV reloadData];
+    }
+    
+    [self.leftPackBtn setImage:[UIImage imageNamed:@"message_left_arrow1.png"] forState:UIControlStateDisabled];
+    [self.rightPackBtn setImage:[UIImage imageNamed:@"message_right_arrow1.png"] forState:UIControlStateDisabled];
+}
+
+
+-(void)dealloc
+{
+    [theOrder release];
+    [servant release];
+    [groupLogoIV release];
+    [orderCodeLbl release];
+    [orderDateLbl release];
+    [packNameLbl release];
+    [packStatusLbl release];
+    [leftPackBtn release];
+    [rightPackBtn release];
+    [packStatusListView release];
+    [packInfoTV release];
+    [scrollView release];
+
+    [materialFlowDatas release];
+    [_orderDetail release];
+    [_orderId release];
+    
+    [super dealloc];
+}
+
+
+
+@end

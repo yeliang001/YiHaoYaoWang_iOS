@@ -1,0 +1,894 @@
+//
+//  LoginViewController.m
+//  yhd
+//
+//  Created by dev dev on 12-6-18.
+//  Copyright (c) 2012年 __MyCompanyName__. All rights reserved.
+//
+
+#import "LoginViewController.h"
+#import "MyListViewController.h"
+#import "VerifyCodeVO.h"
+#import "ProvinceVO.h"
+#import "CartItemVO.h"
+#import "ProductVO.h"
+#import "UserManageTool.h"
+#import "OrderItemVO.h"
+#import "UserService.h"
+//#import "AliLogView.h"
+#import "OTSAliPayWebView.h"
+#import "SDImageView+SDWebCache.h"
+#import "OTSGpsHelper.h"
+#import "WebViewController.h"
+#import "RegexKitLite.h"
+
+#define kOAuthConsumerKey @"356866357"
+#define kOAuthConsumerSecret @"5905214414e9e8a5aa50cb17bd499210"
+#define kUserInformation [NSHomeDirectory() stringByAppendingPathComponent:@"Documents"]
+
+
+
+
+@interface LoginViewController ()
+-(void)alipayUnionLogin:(id)sender;
+@property(nonatomic, retain)WebViewController* webVC;
+@property (nonatomic)BOOL isNeedRestIdState;
+@end
+
+@implementation LoginViewController
+@synthesize weiBoEngine = _sinaOAuth;
+@synthesize mcart;
+@synthesize mneedToAddInCart;
+@synthesize delegate;
+@synthesize aliPlayWebView = _aliPlayWebView;
+@synthesize webVC = _webVC;
+@synthesize closeButton = _closeButton;
+@synthesize remenberMeBtn;
+@synthesize autoLoginBtn;
+#pragma mark - View
+- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
+{
+    self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
+    if (self) {
+        // Custom initialization
+    }
+    return self;
+}
+
+-(void)closeMe:(NSNotification*)aNote
+{
+    [self closeClicked:nil];
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    
+    //[[NSNotificationCenter defaultCenter] postNotificationName:kNotifyProvincePop object:nil];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(closeMe:) name:kNotifyCloseLoginVC object:nil];
+    
+    //进入登录页数据统计
+    JSTrackingPrama* prama = [[[JSTrackingPrama alloc]initWithJSType:EJStracking_Login extraPramaDic:nil]autorelease];
+    [DoTracking doJsTrackingWithParma:prama];
+    
+    // 支付宝登录视图
+    CGRect aliRect = self.view.bounds;
+    aliRect.origin.y += 80;
+    aliRect.size.height -= 280;
+    aliRect.origin.x += 10;
+    aliRect.size.width -= 120;
+    
+    self.aliPlayWebView = [[[OTSAliPayWebView alloc] initWithFrame:aliRect] autorelease];
+    _aliPlayWebView.aliPayDelegate = self;
+    //[self.view addSubview:_aliPlayWebView];
+    
+//    [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadGetVerifyCode) toTarget:self withObject:nil];
+    [self showVerifyCodeInView:mverifyCodeImageView];
+    self.navigationController.navigationBar.hidden = YES;
+    //默认自动登陆、记住密码
+    [[UserManageTool sharedInstance] setAutoLoginStatus:@"1"];
+    
+    //init the sina engine
+    WBEngine *engine = [[WBEngine alloc] initWithAppKey:kOAuthConsumerKey appSecret:kOAuthConsumerSecret];
+    [engine setRootViewController:self];
+    [engine setDelegate:self];
+    [engine setRedirectURI:@"http://"];
+    [engine setIsUserExclusive:NO];
+    self.weiBoEngine = engine;
+    [engine release];
+    //sina engine init end
+    
+    //init the tencent engine
+    _tencentOAuth = [[TencentOAuth alloc] initWithAppId:@"100234077"
+											andDelegate:self];
+	_tencentOAuth.redirectURI = @"www.qq.com";
+    _permissions =  [[NSMutableArray alloc] initWithObjects:@"get_user_info",@"add_share", @"add_topic",@"add_one_blog", @"list_album", @"upload_pic", @"list_photo", @"add_album", @"check_page_fans",nil];
+    
+    if ([[UserManageTool sharedInstance] GetUserName]) {
+        mLoginUserName.text = [[UserManageTool sharedInstance] GetTheOneStoreAccount];
+        if ([[UserManageTool sharedInstance].GetRemberStatus intValue]) {
+            mLoginUserPassword.text = [[UserManageTool sharedInstance] GetUserPass];
+        }
+    }
+    [[UserManageTool sharedInstance]setRemenberStatus:[NSNumber numberWithInt:1]];
+    //UISwipeGestureRecognizer
+    UISwipeGestureRecognizer * swipeGes = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(handleSwipeFromLogin:)];
+    swipeGes.direction = UISwipeGestureRecognizerDirectionRight;
+    [self.view addGestureRecognizer:swipeGes];
+    [swipeGes release];
+    
+    //点击手势处理
+    UITapGestureRecognizer *tapGes = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
+    [self.view addGestureRecognizer:tapGes];
+    tapGes.cancelsTouchesInView = NO;
+    [tapGes release];
+    
+   id rem= [[UserManageTool sharedInstance] GetRemberStatus];
+    if (rem==nil) {
+        [[UserManageTool sharedInstance]setRemenberStatus:[NSNumber numberWithInt:1]];
+    }
+    NSString* autolog=[[UserManageTool sharedInstance] GetAutoLoginStatus];
+    if (autolog==nil) {
+        [[UserManageTool sharedInstance] setAutoLoginStatus:@"1"];
+    }
+
+    [remenberMeBtn setImage:[UIImage imageNamed:@"pad_checkbox_sel.png"] forState:UIControlStateSelected];
+    [remenberMeBtn setImage:[UIImage imageNamed:@"pad_checkbox_unsel.png"] forState:UIControlStateNormal];
+    [autoLoginBtn setImage:[UIImage imageNamed:@"pad_checkbox_sel.png"] forState:UIControlStateSelected];
+    [autoLoginBtn setImage:[UIImage imageNamed:@"pad_checkbox_unsel.png"] forState:UIControlStateNormal];
+
+    
+    remenberMeBtn.selected=[[[UserManageTool sharedInstance] GetRemberStatus] intValue];
+    autoLoginBtn.selected=[[[UserManageTool sharedInstance] GetAutoLoginStatus] intValue];
+    [self updateUserLoginInfo];
+
+}
+
+
+-(void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+//    if ([[UserManageTool sharedInstance] GetUserName]) {
+//        mLoginUserName.text = [[UserManageTool sharedInstance] GetTheOneStoreAccount];
+//        if ([[UserManageTool sharedInstance].GetRemberStatus intValue]) {
+//            mLoginUserPassword.text = [[UserManageTool sharedInstance] GetUserPass];
+//        }
+//    }
+
+    [MobClick beginLogPageView:@"login"];
+}
+
+-(void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    [MobClick endLogPageView:@"login"];
+}
+
+-(void)releaseMyResource
+{
+    if (_tencentOAuth!=nil) {
+        [_tencentOAuth release];
+        _tencentOAuth=nil;
+    }
+    if (_permissions!=nil) {
+        [_permissions release];
+        _permissions=nil;
+    }
+    if (_sinaOAuth!=nil) {
+        [_sinaOAuth release];
+        _sinaOAuth=nil;
+    }
+    if (mtemptoken!=nil) {
+        [mtemptoken release];
+        mtemptoken=nil;
+    }
+    if (mUserName!=nil) {
+        [mUserName release];
+        mUserName=nil;
+    }
+    if (mNickName!=nil) {
+        [mNickName release];
+        mNickName=nil;
+    }
+    if (mUserImage!=nil) {
+        [mUserImage release];
+        mUserImage=nil;
+    }
+    if (mCocode!=nil) {
+        [mCocode release];
+        mCocode=nil;
+    }
+}
+
+-(void)viewDidUnload
+{
+    [self releaseMyResource];
+    [self setCloseButton:nil];
+    [super viewDidUnload];
+}
+
+-(void)dealloc
+{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    
+    [self releaseMyResource];
+    [_closeButton release];
+    [_webVC release];
+    [_verifycodeVO release];
+    [super dealloc];
+}
+#pragma mark - 手势
+- (void)handleSwipeFromLogin:(UISwipeGestureRecognizer *)gestureRecognizer {
+    
+    [[NSNotificationCenter defaultCenter]postNotificationName:@"kcloseloginview" object:nil userInfo:nil];
+    if ([delegate respondsToSelector:@selector(loginclosed)])
+    {
+        [delegate loginclosed];
+    }
+}
+-(void)handleTap:(UIPanGestureRecognizer*)gestureRecognizer
+{
+    [mLoginUserName resignFirstResponder];
+    [mLoginUserPassword resignFirstResponder];
+    
+    [mRegisterUserName resignFirstResponder];
+    [mRegisterPasswordTextField resignFirstResponder];
+    [mverifyCodeTextField resignFirstResponder];
+    [loginVerifyTF resignFirstResponder];
+}
+#pragma mark - 登录
+#pragma mark-
+// 显示验证码页面
+-(void)showLoginVerifyView{
+    [loginVerifyView setHidden:NO];
+    _isNeedRestIdState = YES;
+    [loginBtn setFrame:CGRectMake(119, 356, 205, 43)];
+    [loginVerifyView setFrame:CGRectMake(110, 311, 300, 44)];
+    [self showVerifyCodeInView:loginVerifyImageView];
+}
+// 显示验证码到对应的imageview上去
+-(void)showVerifyCodeInView:(UIImageView*)imageView{
+    [self performInThreadBlock:^(){
+        NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
+        UserService *ser = [[UserService alloc] init];
+        self.verifycodeVO = [ser getVerifyCodeUrl:[GlobalValue getGlobalValueInstance].trader];
+        mtemptoken = self.verifycodeVO.tempToken;
+        [ser release];
+        [pool drain];
+    } completionInMainBlock:^() {
+        NSURL *url = [NSURL URLWithString:_verifycodeVO.codeUrl];
+        NSData *data = [NSData dataWithContentsOfURL:url];
+        imageView.image = [UIImage imageWithData:data];
+    }];
+}
+-(void)hiddenLoginVerifyView{
+    [loginVerifyView setHidden:YES];
+    [loginBtn setFrame:CGRectMake(119, 311,205, 43)];
+    [loginVerifyView setFrame:CGRectMake(110, 351,300, 44)];
+}
+-(IBAction)rememberPasswordClick:(id)sender{
+    UIButton* b=(UIButton*)sender;
+    if (b.selected==NO) {
+        b.selected=YES;
+        [[UserManageTool sharedInstance] setRemenberStatus:[NSNumber numberWithInt:1 ]];
+        if (!autoLoginBtn.selected) {
+            [[UserManageTool sharedInstance]setAutoLoginStatus: @"1"];
+            autoLoginBtn.selected=YES;
+        }
+    }else{
+        b.selected=NO;
+        //mLoginUserPassword.text=@"";
+        [[UserManageTool sharedInstance] setRemenberStatus:[NSNumber numberWithInt:0]];
+        if (autoLoginBtn.selected) {
+            [[UserManageTool sharedInstance]setAutoLoginStatus: @"0"];
+            autoLoginBtn.selected=NO;
+        }
+    }
+  [self updateUserLoginInfo];
+}
+
+-(IBAction)autoLoginClick:(id)sender{
+    UIButton* b=(UIButton*)sender;
+    if (b.selected==NO) {
+        b.selected=YES;
+        [[UserManageTool sharedInstance] setAutoLoginStatus:@"1"];
+        if (remenberMeBtn.selected==NO) {
+            [[UserManageTool sharedInstance]setRemenberStatus:[NSNumber numberWithInt:0]];
+            remenberMeBtn.selected=YES;
+        }
+    }else{
+        [[UserManageTool sharedInstance] setAutoLoginStatus:@"0"];
+        b.selected=NO;
+    }
+    [self updateUserLoginInfo];
+}
+
+-(void)updateUserLoginInfo{
+    
+    NSMutableDictionary* tempUserInfo=[[UserManageTool sharedInstance].m_dicUserManager objectForKey:KEY];
+    [[UserManageTool sharedInstance] AddOrUpdate:KEY withName:[tempUserInfo valueForKey:KEY_USER_NAME] withTheOneStoreAccount:[tempUserInfo valueForKey:KEY_THEONESTOREACCOUNT] withPass:[tempUserInfo valueForKey:KEY_USER_PASS] withRememberme:[tempUserInfo valueForKey:KEY_REMEMBER] withCocode:[tempUserInfo valueForKey:KEY_COCODE] withUnionlogin:[tempUserInfo valueForKey:KEY_UNIONLOGIN] withNickname:[tempUserInfo valueForKey:KEY_NICKNAME] withUserimg:[tempUserInfo valueForKey:KEY_USERIMG] withAutoLoginStatus:[tempUserInfo valueForKey:KEY_AUTOLOGSTATUS] withNeedToSave:YES];
+}
+
+-(void)newThreadLogin:(NSMutableDictionary *)dictionary
+{
+    NSString *userName=  [dictionary objectForKey:@"UserName"];
+    NSString *passWord=  [dictionary objectForKey:@"PassWord"];
+    NSString *verifyCode= [dictionary objectForKey:@"VerifyCode"];
+    NSString* token = [dictionary objectForKey:@"TempToken"];
+    
+    NSMutableDictionary *mDictionary=[NSMutableDictionary dictionary];
+    NSNumber *provinceId=[NSNumber numberWithInt:[[OTSGpsHelper sharedInstance].provinceVO.nid intValue]];
+    [mDictionary setObject:provinceId forKey:@"ProvinceId"];
+    [mDictionary setObject:[NSString stringWithString:userName] forKey:@"UserName"];
+    [mDictionary setObject:[NSString stringWithString:passWord] forKey:@"PassWord"];
+    if(verifyCode)
+        [mDictionary setObject:verifyCode forKey:@"VerifyCode"];
+    if(token)
+        [mDictionary setObject:token forKey:@"TempToken"];
+    
+    [self newThreadLoginWithObject:mDictionary finishSelector:@selector(loginHandle:)];
+
+}
+//登录
+-(BOOL)newThreadLoginWithObject:(NSMutableDictionary *)object finishSelector:(SEL)selector
+{
+    NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
+    
+    //    OTSServiceHelper *service=[OTSServiceHelper sharedInstance];
+    //    NSNumber *provinceId=[object objectForKey:@"ProvinceId"];
+    NSString *userName=[object objectForKey:@"UserName"];
+    NSString *passWord=[object objectForKey:@"PassWord"];
+    //    NSString *result=[service login:[GlobalValue getGlobalValueInstance].trader provinceId:provinceId username:userName password:passWord];
+    
+    OTSLgoinParam *param = [[[OTSLgoinParam alloc] init] autorelease];
+    param.userName = userName;
+    param.password = passWord;
+    param.verifyCode = [object objectForKey:@"VerifyCode"];
+    param.tempoToken = [object objectForKey:@"TempToken"];
+    
+    [[OTSUserLoginHelper sharedInstance] loginWithParam:param];
+    
+    
+    //    if (result==nil || [result isKindOfClass:[NSNull class]])
+    //    {
+    //        [self performSelectorOnMainThread:@selector(showError:)
+    //                               withObject:@"网络异常，请检查网络配置..."
+    //                            waitUntilDone:NO];
+    //    }
+    //    else
+    //    {
+    //        if ([result isEqualToString:@"-1"])
+    //        {
+    //            [self performSelectorOnMainThread:@selector(showError:)
+    //                                   withObject:@"用户名不正确"
+    //                                waitUntilDone:NO];
+    //
+    //        }
+    //        else if ([result isEqualToString:@"-2"])
+    //        {
+    //            [self performSelectorOnMainThread:@selector(showError:)
+    //                                   withObject:@"密码不正确"
+    //                                waitUntilDone:NO];
+    //        } else {
+    //            [self performSelectorOnMainThread:selector
+    //                                   withObject:result
+    //                                waitUntilDone:NO];
+    //        }
+    //    }
+    
+    if ([OTSUserLoginHelper sharedInstance].isNilResult)
+    {
+        [self performSelectorOnMainThread:@selector(showError:) withObject:@"网络异常,请稍候再试..." waitUntilDone:NO];
+	}
+    
+    else if ([OTSUserLoginHelper sharedInstance].isResultHasError)
+    {
+        if ([OTSUserLoginHelper sharedInstance].isNeedVerifyCode || loginVerifyView.hidden == NO) { // 显示/刷新验证码
+            [self performInMainBlock:^() {
+                [self showLoginVerifyView];
+            }];
+        }
+        
+        [self performSelectorOnMainThread:@selector(showError:) withObject:[OTSUserLoginHelper sharedInstance].loginResult.errorInfo waitUntilDone:NO];
+    }
+    
+    else if ([OTSUserLoginHelper sharedInstance].isLoginSuccess)
+    {
+        [self performSelectorOnMainThread:selector
+                               withObject:[OTSUserLoginHelper sharedInstance].loginResult.token
+                            waitUntilDone:NO];
+    }
+    
+    
+    [pool drain];
+    
+    return [OTSUserLoginHelper sharedInstance].isLoginSuccess;
+}
+-(void)loginHandle:(NSString *)result
+{
+    if (!mloginsucceed)
+    {
+        [GlobalValue getGlobalValueInstance].storeToken = result;
+        mloginsucceed=YES;
+        NSNumber* needRemenber=[NSNumber numberWithInt:[[[UserManageTool sharedInstance] GetRemberStatus] intValue]];
+        NSString*autoLoginValue=[[UserManageTool sharedInstance] GetAutoLoginStatus];
+        [[UserManageTool sharedInstance] AddOrUpdate:KEY
+                                            withName:[mLoginUserName text]
+                              withTheOneStoreAccount:[mLoginUserName text]
+                                            withPass:[mLoginUserPassword text]
+                                      withRememberme:needRemenber
+                                          withCocode:@""
+                                      withUnionlogin:@"LOGIN"
+                                        withNickname:@""
+                                         withUserimg:@""
+                                 withAutoLoginStatus:autoLoginValue
+                                      withNeedToSave:YES];
+        
+        [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadSynCart) toTarget:self withObject:nil];
+    }
+}
+
+#pragma mark - 联合登录
+-(void)unionLogin
+{
+    NSMutableDictionary *mDictionary=[[NSMutableDictionary alloc] init];
+    NSNumber *provinceId=[NSNumber numberWithInt:[[OTSGpsHelper sharedInstance].provinceVO.nid intValue]];
+    [mDictionary setObject:provinceId forKey:@"ProvinceId"];
+    [mDictionary setObject:[NSString stringWithString:mUserName] forKey:@"UserName"];
+    [mDictionary setObject:[NSString stringWithString:mNickName] forKey:@"RealUserName"];
+    [mDictionary setObject:[NSString stringWithString:mCocode] forKey:@"Cocode"];
+    [self setUpThreadWithStatus:THREAD_STATUS_UNION_LOGIN showLoading:YES withObject:mDictionary finishSelector:@selector(unionLoginHandle:)];
+    [mDictionary release];
+}
+
+-(void)unionLoginHandle:(NSString *)result
+{
+    if (!mloginsucceed)
+    {
+        [GlobalValue getGlobalValueInstance].storeToken = result;
+        [[GlobalValue getGlobalValueInstance] setNickName:mNickName];
+        [[GlobalValue getGlobalValueInstance] setUserName:mUserName];
+        mloginsucceed = YES;
+        if ([[UserManageTool sharedInstance] GetTheOneStoreAccount] == nil) 
+        {
+            [[UserManageTool sharedInstance] AddOrUpdate:KEY withName:mUserName withTheOneStoreAccount:@"" withPass:@"" withRememberme:[[UserManageTool sharedInstance] GetRemberStatus] withCocode:mCocode withUnionlogin:@"UNIONLOGIN"withNickname:mNickName withUserimg:nil withAutoLoginStatus:[[UserManageTool sharedInstance] GetAutoLoginStatus] withNeedToSave:YES];
+        }
+        else 
+        {
+            [[UserManageTool sharedInstance] AddOrUpdate:KEY withName:mUserName withTheOneStoreAccount:[[UserManageTool sharedInstance] GetTheOneStoreAccount] withPass:[[UserManageTool sharedInstance] GetUserPass] withRememberme:[[UserManageTool sharedInstance] GetRemberStatus] withCocode:mCocode withUnionlogin:@"UNIONLOGIN"withNickname:mNickName withUserimg:nil withAutoLoginStatus:[[UserManageTool sharedInstance] GetAutoLoginStatus] withNeedToSave:YES];
+        }
+        [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadSynCart) toTarget:self withObject:nil];
+    }
+}
+
+#pragma mark - 获取验证码
+-(void)newThreadGetVerifyCode
+{
+    [self newThreadGetVerifyCodeWithObject:nil finishSelector:@selector(getVerifyCodeHandle:)];
+}
+
+-(void)getVerifyCodeHandle:(VerifyCodeVO *)verifyCodeVO
+{
+    [mverifyCodeImageView setImageWithURL:[NSURL URLWithString:verifyCodeVO.codeUrl]];
+    if (mtemptoken!=nil) {
+        [mtemptoken release];
+    }
+    mtemptoken=[[NSString alloc] initWithString:verifyCodeVO.tempToken];
+}
+
+#pragma mark - 注册
+-(void)registe
+{
+    NSMutableDictionary *mDictionary=[[NSMutableDictionary alloc] init];
+    NSString *userName=mRegisterUserName.text;
+    if (userName==nil) {
+        userName=@"";
+    }
+    [mDictionary setObject:[NSString stringWithString:userName] forKey:@"UserName"];
+    NSString *password=mRegisterPasswordTextField.text;
+    if (password==nil) {
+        password=@"";
+    }
+    [mDictionary setObject:[NSString stringWithString:password] forKey:@"PassWord"];
+    NSString *veryfyCode=mverifyCodeTextField.text;
+    if (veryfyCode==nil) {
+        veryfyCode=@"";
+    }
+    [mDictionary setObject:[NSString stringWithString:veryfyCode] forKey:@"VerifyCode"];
+    NSString *tempToken=mtemptoken;
+    if (tempToken==nil) {
+        tempToken=@"";
+    }
+    [mDictionary setObject:[NSString stringWithString:tempToken] forKey:@"TempToken"];
+    [self setUpThreadWithStatus:THREAD_STATUS_REGISTE showLoading:YES withObject:mDictionary finishSelector:@selector(registeHandle:)];
+    [mDictionary release];
+    
+    JSTrackingPrama* prama = [[[JSTrackingPrama alloc]initWithJSType:EJStracking_Register extraPramaDic:nil]autorelease];
+    [DoTracking doJsTrackingWithParma:prama];
+}
+
+-(void)registeHandle:(NSNumber *)result
+{
+    if ([result intValue]==1) {
+        NSMutableDictionary *mDictionary=[[NSMutableDictionary alloc] init];
+        [mDictionary setObject:mRegisterUserName.text forKey:@"UserName"];
+        [mDictionary setObject:mRegisterPasswordTextField.text forKey:@"PassWord"];
+        mLoginUserName.text=mRegisterUserName.text;
+        mLoginUserPassword.text=mRegisterPasswordTextField.text;
+       [[UserManageTool sharedInstance] setRemenberStatus:[NSNumber numberWithInt:1]];
+        [[UserManageTool sharedInstance] setAutoLoginStatus:@"1"];
+        [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadLogin:) toTarget:self withObject:mDictionary];
+        [mDictionary release];
+    }
+}
+
+#pragma mark - 同步购物车
+-(void)newThreadSynCart
+{
+    @synchronized([self class])
+    {
+        NSMutableDictionary *mDictionary=[[NSMutableDictionary alloc] init];
+        NSMutableArray *productIds=[NSMutableArray arrayWithCapacity:0];
+        NSMutableArray *merchantIds=[NSMutableArray arrayWithCapacity:0];
+        NSMutableArray *quantitys=[NSMutableArray arrayWithCapacity:0];
+        NSMutableArray *promotionIds=[NSMutableArray arrayWithCapacity:0];
+        
+        for (int i=0; i<[mcart.buyItemList count]; i++)
+        {
+            OrderItemVO *orderItemVO=[mcart.buyItemList objectAtIndex:i];
+            [productIds addObject:orderItemVO.product.productId];
+            [merchantIds addObject:orderItemVO.product.merchantId];
+            [quantitys addObject:orderItemVO.buyQuantity];
+            [promotionIds addObject:orderItemVO.product.realPromotionID];
+        }
+        
+        [mDictionary setObject:productIds forKey:@"ProductIds"];
+        [mDictionary setObject:merchantIds forKey:@"MerchantIds"];
+        [mDictionary setObject:quantitys forKey:@"Quantitys"];
+        [mDictionary setObject:promotionIds forKey:@"PromotionIds"];
+        [self newThreadAddCartWithObject:mDictionary finishSelector:@selector(synCartHandle:)];
+        [mDictionary release];
+    }
+}
+
+-(void)synCartHandle:(NSArray *)array
+{
+    [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadGetSessionCart) toTarget:self withObject:nil];
+//    [[NSNotificationCenter defaultCenter] postNotificationName:@"UpdateCartNotification" object:nil];
+}
+
+#pragma mark - 获取购物车
+-(void)newThreadGetSessionCart
+{
+    [self newThreadGetSessionCartWithObject:nil finishSelector:@selector(getSessionCartHandle:)];
+}
+
+-(void)getSessionCartHandle:(CartVO *)cartVO
+{
+    [[DataHandler sharedDataHandler] setCart:cartVO];
+    //附加
+    [[NSNotificationCenter defaultCenter] postNotificationName:kNotifyCartChange object:nil];
+    [[NSNotificationCenter defaultCenter] postNotificationName:kNotifyCartCacheChange object:nil];
+    [[NSNotificationCenter defaultCenter] postNotificationName:kNotifyCartReload object:nil];
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self popLogin];
+    });
+
+}
+
+#pragma mark - 登录成功
+-(void)popLogin
+{
+    [[NSNotificationCenter defaultCenter]postNotificationName:@"krefreshafterlogin" object:nil userInfo:nil];
+    [[NSNotificationCenter defaultCenter]postNotificationName:@"kcloseloginview" object:nil userInfo:nil];
+    if ([delegate respondsToSelector:@selector(loginsucceed)]) {
+        [delegate loginsucceed];
+    }
+}
+
+#pragma mark - UserAction
+-(IBAction)switchchanged:(id)sender
+{
+    [mRegisterUserName becomeFirstResponder] ;
+    if (mShowPasswordSwitch.on)
+    {
+        mRegisterPasswordTextField.secureTextEntry = NO;
+    }
+    else {
+        mRegisterPasswordTextField.secureTextEntry = YES;
+    }
+    
+}
+-(IBAction)loginClicked:(id)sender
+{
+    if (mLoginUserName.text==nil || [mLoginUserName.text isEqualToString:@""]) {
+        [self showError:@"帐号不能为空"];
+        return;
+    }
+    if (mLoginUserPassword.text==nil || [mLoginUserPassword.text isEqualToString:@""]) {
+        [self showError:@"密码不能为空"];
+        return;
+    }
+    if(loginVerifyView.hidden == NO && ([[loginVerifyTF text]length]==0 || [[loginVerifyTF.text stringByReplacingOccurrencesOfString:@" " withString:@""] length]<1)){
+        [self showError:@"验证码不为空"];
+        [loginVerifyTF setText:@""];
+        return;
+    }
+    if (loginVerifyView.hidden == NO && ![[loginVerifyTF text] isMatchedByRegex:@"^[A-Za-z0-9]+$"]) {
+        [self showError:@"验证码错误，请重新输入"];
+        [loginVerifyTF setText:@""];
+        return;
+    }
+    if ([[dataHandler checkNetWorkType] isEqualToString:@"no"])
+    {
+        UIAlertView * alert = [[UIAlertView alloc]initWithTitle:@"网络问题" message:@"登录失败，请检查网络" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
+        [alert show];
+        [alert release];
+    }
+    else {
+        if (!mloginsucceed) {
+            [MobClick event:@"login"];
+            
+            NSMutableDictionary *mDictionary=[[NSMutableDictionary alloc] init];
+            [mDictionary setObject:mLoginUserName.text forKey:@"UserName"];
+            [mDictionary setObject:mLoginUserPassword.text forKey:@"PassWord"];
+            if(loginVerifyTF.text && loginVerifyTF.text.length)
+            {
+                [mDictionary setObject:loginVerifyTF.text forKey:@"VerifyCode"];
+            }
+            if(mtemptoken)
+            {
+                [mDictionary setObject:mtemptoken forKey:@"TempToken"];
+            }
+            [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadLogin:) toTarget:self withObject:mDictionary];
+            [mDictionary release];
+        }
+    }
+}
+-(IBAction)closeClicked:(id)sender
+{
+    [[NSNotificationCenter defaultCenter]postNotificationName:@"kcloseloginview" object:nil userInfo:nil];
+    if ([delegate respondsToSelector:@selector(loginclosed)])
+    {
+        [delegate loginclosed];
+    }
+}
+
+
+-(IBAction)zhifubaologinClicked:(id)sender
+{
+    [self alipayUnionLogin:sender];
+}
+
+-(IBAction)oneMallLoginAction:(id)sender
+{
+    NSString* urlStr = [NSString stringWithFormat:@"http://m.1mall.com/mw/login?mallcomingtype=true&osType=40"];
+    //http://m.1mall.com/mw/login?mallcomingtype=true&osType=40
+    
+//    UIWebView *oneMallWebView = [[[UIWebView alloc] initWithFrame:self.view.bounds] autorelease];
+//    [self.view addSubview:oneMallWebView];
+//    NSURLRequest * req = [NSURLRequest requestWithURL:[NSURL URLWithString:urlStr]];
+//    [oneMallWebView loadRequest:req];
+//    [self.view addSubview:oneMallWebView];
+    
+    CGRect webRC = CGRectMake(0, 0, self.view.frame.size.width - 104, self.view.frame.size.height +30);
+    self.webVC = [[[WebViewController alloc] initWithFrame:webRC WapType:3 URL:urlStr] autorelease];
+    [self.view addSubview:self.webVC.view];
+    
+    
+    [self.view bringSubviewToFront:self.closeButton];
+    
+}
+
+
+-(IBAction)sinaweibologinClicked:(id)sender
+{
+    if ([[dataHandler checkNetWorkType] isEqualToString:@"no"])
+    {
+        UIAlertView * alert = [[UIAlertView alloc]initWithTitle:@"网络问题" message:@"登录失败，请检查网络" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
+        [alert show];
+        [alert release];
+    }
+    else {
+        if (!mloginsucceed)
+        {
+            if (!msinaLogedin) 
+            {
+                [MobClick event:@"weibo_login"];
+                [_sinaOAuth logIn];
+            }
+        }
+    }
+}
+-(IBAction)qqloginClicked:(id)sender
+{
+    [MobClick event:@"qq_login"];
+    if ([[dataHandler checkNetWorkType] isEqualToString:@"no"])
+    {
+        UIAlertView * alert = [[UIAlertView alloc]initWithTitle:@"网络问题" message:@"登录失败，请检查网络" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
+        [alert show];
+        [alert release];
+    }
+    else {
+        if (!mloginsucceed)
+        {
+            [_tencentOAuth authorize:_permissions inSafari:NO];
+        }
+    }
+}
+-(IBAction)registerClicked:(id)sender
+{
+    [MobClick event:@"register"];
+    [self registe];
+}
+-(IBAction)changeVerifyCodeClicked:(id)sender
+{
+    UIButton *theBtn = (UIButton *)sender;
+    UIImageView* imageView;
+	if (theBtn.tag == 0) {
+        imageView = loginVerifyImageView;
+	}
+	if (theBtn.tag == 1) {
+        imageView =  mverifyCodeImageView;
+	}
+    [self showVerifyCodeInView:imageView];
+}
+#pragma mark- textField
+- (BOOL)textField:(UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string
+{
+   
+    if (textField == mLoginUserName && loginVerifyView.hidden == NO && _isNeedRestIdState) {
+        [self hiddenLoginVerifyView];
+        _isNeedRestIdState = NO;
+    }
+    return YES;
+}
+
+- (BOOL)textFieldShouldClear:(UITextField *)textField{
+    if (textField == mLoginUserName && loginVerifyView.hidden == NO&& _isNeedRestIdState) {
+        [self hiddenLoginVerifyView];
+    }
+    return YES;
+}
+
+#pragma mark - UIAlertViewDelegate
+//- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex
+//{
+//    //[self popLogin];
+//}
+
+#pragma mark - 支付宝登录
+-(void)alipayUnionLogin:(id)sender
+{
+    [_aliPlayWebView removeFromSuperview];
+    [self.view addSubview:_aliPlayWebView];
+    [self.view bringSubviewToFront:_aliPlayWebView];
+    [_aliPlayWebView goLogin];
+}
+
+-(void)handleAliPayLoginResult:(NSArray*)aResultInfoArr
+{
+    NSLog(@"user manager: handleAliPayLoginResult");
+    
+    if (mUserName!=nil) {
+        [mUserName release];
+    }
+    mUserName=[[NSString alloc] initWithFormat:@"%@@alipay", [aResultInfoArr objectAtIndex:0]];
+    
+    if (mNickName!=nil) {
+        [mNickName release];
+    }
+    mNickName=[[NSString alloc] initWithFormat:@"%@", [aResultInfoArr objectAtIndex:1]];
+    if (mNickName==nil || [mNickName length]<=0)//昵称为空，用手机号登录的情况
+    {
+        if (aResultInfoArr.count > 2)
+        {
+            mNickName=[[NSString alloc] initWithFormat:@"%@", [aResultInfoArr objectAtIndex:2]];
+        }
+        
+    }
+    if (mNickName==nil || [mNickName length]<=0) // 如果还为空，用userName
+    {
+        mNickName=[mUserName retain];
+    }
+    if (mCocode!=nil) {
+        [mCocode release];
+    }
+    mCocode=[[NSString alloc] initWithString:@"alipay"];
+    [self unionLogin];
+}
+
+#pragma mark - TencentSessionDelegate
+- (void)tencentDidLogin 
+{
+    NSLog(@"loginsuccess");
+    [_tencentOAuth getUserInfo];
+}
+
+- (void)tencentDidNotLogin:(BOOL)cancelled
+{
+	if (cancelled){
+		NSLog(@"用户取消登录");
+	}
+	else {
+		NSLog(@"登录失败");
+	}
+	
+}
+
+-(void)tencentDidNotNetWork
+{
+	NSLog(@"无网络连接，请设置网络");
+}
+
+- (void)getUserInfoResponse:(APIResponse*) response 
+{
+	if (response.retCode == URLREQUEST_SUCCEED)
+	{
+		if (mUserName!=nil) {
+            [mUserName release];
+        }
+        mUserName=[[NSString alloc] initWithFormat:@"%@@tencent",[_tencentOAuth openId]];
+        if (mNickName!=nil) {
+            [mNickName release];
+        }
+        mNickName=[[NSString alloc] initWithFormat:@"%@",[response.jsonResponse objectForKey:@"nickname"]];
+        if (mUserImage!=nil) {
+            [mUserImage release];
+        }
+        mUserImage=[[NSString alloc] initWithFormat:@"%@",[response.jsonResponse objectForKey:@"figureurl_1"]];
+        if (mCocode!=nil) {
+            [mCocode release];
+        }
+        mCocode=[[NSString alloc] initWithString:@"tencent"];
+        [self unionLogin];
+	}
+	else {
+		UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"操作失败" message:response.errorMsg							  
+													   delegate:self cancelButtonTitle:@"我知道啦" otherButtonTitles: nil];
+		[alert show];
+        [alert release];
+	}
+	NSLog(@"获取个人信息完成");
+}
+
+#pragma mark - SinaWeiboDelegate
+- (void)engineDidLogIn:(WBEngine *)engine
+{
+    NSDictionary *dict=[[[NSDictionary alloc] initWithObjectsAndKeys:[engine userID], @"uid", nil] autorelease];
+    [engine loadRequestWithMethodName:@"users/show.json" httpMethod:@"GET" params:dict postDataType:kWBRequestPostDataTypeNone httpHeaderFields:nil];
+}
+-(void)engineAlreadyLoggedIn:(WBEngine *)engine
+{
+}
+- (void)logInAlertView:(WBLogInAlertView *)alertView logInWithUserID:(NSString *)userID password:(NSString *)password
+{
+    [_sinaOAuth logInUsingUserID:userID password:password];
+}
+- (void)engine:(WBEngine *)engine requestDidSucceedWithResult:(id)result
+{
+    if ([result isKindOfClass:[NSDictionary class]])
+    {
+        NSDictionary *dict = (NSDictionary *)result;
+        if (mUserName!=nil) {
+            [mUserName release];
+        }
+        mUserName=[[NSString alloc] initWithFormat:@"%@@sina",[dict objectForKey:@"id"]];
+        if (mNickName!=nil) {
+            [mNickName release];
+        }
+        mNickName=[[NSString alloc] initWithFormat:@"%@",[dict objectForKey:@"name"]];
+        if (mUserImage!=nil) {
+            [mUserImage release];
+        }
+        mUserImage=[[NSString alloc] initWithFormat:@"%@",[dict objectForKey:@"profile_image_url"]];
+        if (mCocode!=nil) {
+            [mCocode release];
+        }
+        mCocode=[[NSString alloc] initWithString:@"sina"];
+        [self unionLogin];
+    }
+}
+@end

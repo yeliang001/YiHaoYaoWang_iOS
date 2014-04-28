@@ -1,0 +1,74 @@
+//
+//  ProductInfo.m
+//  TheStoreApp
+//
+//  Created by LinPan on 13-8-5.
+//
+//
+
+#import "ProductInfo.h"
+
+@implementation ProductInfo
+
+- (void)dealloc
+{
+    [_productId release];
+    [_name release];
+    [_category release];
+    [_brandId release];
+    [_brandName release];
+    [_productImageUrl release];
+    [_time release];
+    [_price release];
+    [_marketPrice release];
+    [_status release];
+    [_store release];
+    [_saleType release];
+    [_showPic release];
+    [_subTotalScore release];
+    [_littlePic release];
+    [_userGrade release];
+    [_userGradeCount release];
+    [_comments release];
+    [_commentList release];
+    [_salesCount release];
+    [_attribute release];
+    [_specialStatus release];
+    [_filter release];
+    [_prescription release];
+    [_morePrice release];
+    
+    [_categoryId release];
+    [_categoryName release];
+    [_color release];
+    [_count release];
+    [_gift release];
+    [_mainImg1 release];
+    [_mainImg2 release];
+    [_mainImg3 release];
+    [_mainImg4 release];
+    [_mainImg5 release];
+    [_mainImg6 release];
+    [_mainInfo release];
+    [_mainPush release];
+    [_productNO release];
+    [_recommendPrice release];
+    [_saleInfo release];
+    [_saleService release];
+    [_sellType release];
+    [_seriesId release];
+    [_seriesName release];
+    [_size release];
+    [_sellerId release];
+    [_taocanList release];
+    [_unit release];
+    [_desc release];
+    
+    [_middleDetailImgList release];
+    [_largeDetailImgList release];
+    
+    
+    [super dealloc];
+}
+
+@end

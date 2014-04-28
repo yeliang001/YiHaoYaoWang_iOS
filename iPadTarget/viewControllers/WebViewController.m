@@ -1,0 +1,675 @@
+//
+//  WebViewController.m
+//  TheStoreApp
+//
+//  Created by xuexiang on 12-10-11.
+//  Copyright (c) 2012年 __MyCompanyName__. All rights reserved.
+//
+
+#import "WebViewController.h"
+#import "GTMBase64.h"
+#import "MyListViewController.h"
+#import "UserManageTool.h"
+#import "GlobalValue.h"
+#import "Trader.h"
+#import "OrderV2.h"
+#import "OTSNaviAnimation.h"
+@interface WebViewController ()
+@property (nonatomic, readonly)OtsPadLoadingView *loadingView;
+@end
+
+@implementation WebViewController
+
+@synthesize wapType;
+@synthesize m_UrlString;
+@synthesize isFirstToMallWeb,isNeededShowUrl;
+@synthesize groupState;
+@synthesize _currentCheckOrderID;
+@synthesize loadingView=_loadingView;
+
+- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
+{
+    self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
+    if (self) {
+        // Custom initialization
+    }
+    return self;
+}
+- (id)initWithFrame:(CGRect)frame WapType:(NSInteger)wapTypeInt URL:(NSString*)urlStr{
+    self = [super init];
+    self.wapType = wapTypeInt;
+    NSRange range = [urlStr rangeOfString:@"?"];
+    if (range.location == NSNotFound) {
+        self.m_UrlString = [urlStr stringByAppendingFormat:@"?tracker_u=%@",[[[GlobalValue getGlobalValueInstance] trader] unionKey]];
+    }else {
+        self.m_UrlString = [urlStr stringByAppendingFormat:@"&tracker_u=%@",[[[GlobalValue getGlobalValueInstance] trader] unionKey]];
+    }
+    self.m_UrlString = [m_UrlString stringByAppendingFormat:@"&DeviceCode=%@&InterfaceVersion=%@&ClientVersion=%@&ClientAppVersion=%@"
+              ,[[[GlobalValue getGlobalValueInstance] trader] deviceCode]
+              ,[[[GlobalValue getGlobalValueInstance] trader] interfaceVersion]
+              ,[[[GlobalValue getGlobalValueInstance] trader] clientVersion]
+              ,[[[GlobalValue getGlobalValueInstance] trader] clientAppVersion]];
+    currentFrame = frame;
+    if (self) {
+    }
+    return self;
+}
+-(OtsPadLoadingView*)loadingView
+{
+    if (_loadingView == nil)
+    {
+        _loadingView = [[OtsPadLoadingView alloc] init];
+    }
+    
+    return _loadingView;
+}
+- (void)initToolBarItemsWithFrame:(CGRect)frame{
+    
+    float width = frame.size.width;
+    float startPos = (width - 49*3)/2;
+    
+    toolBarBgImage = [[UIImageView alloc] initWithFrame:CGRectMake(0, -1, width, 50)];
+    [toolBarBgImage setImage:[UIImage imageNamed:@"wap_barBg.png"]];
+    [toolBar addSubview:toolBarBgImage];
+    
+    toSuperBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    [toSuperBtn setImage:[UIImage imageNamed:@"wap_back.png"] forState:UIControlStateNormal];
+    toSuperBtn.frame=CGRectMake(10, 0, 49, 49);
+    toSuperBtn.showsTouchWhenHighlighted=YES;
+    toSuperBtn.hidden = YES;
+    [toSuperBtn addTarget:self action:@selector(gotoSuper) forControlEvents:UIControlEventTouchUpInside];
+    [toolBar addSubview:toSuperBtn];
+    
+    btnSepLine=[[UIImageView alloc] initWithFrame:CGRectMake(20+49, 0, 4, 49)];
+    btnSepLine.image=[UIImage imageNamed:@"wap_line.png"];
+    btnSepLine.hidden = YES;
+    [toolBar addSubview:btnSepLine];
+    
+    backwardBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    [backwardBtn setImage:[UIImage imageNamed:@"wap_backward.png"] forState:UIControlStateNormal];
+    backwardBtn.frame=CGRectMake(startPos, 0, 49, 49);
+    [backwardBtn addTarget:self action:@selector(webBackward) forControlEvents:UIControlEventTouchUpInside];
+    backwardBtn.showsTouchWhenHighlighted=YES;
+    [toolBar addSubview:backwardBtn];
+    
+    forwardBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    [forwardBtn setImage:[UIImage imageNamed:@"wap_foward.png"] forState:UIControlStateNormal];
+    forwardBtn.frame=CGRectMake(startPos+49, 0, 49, 49);
+    [forwardBtn addTarget:self action:@selector(webforward) forControlEvents:UIControlEventTouchUpInside];
+    forwardBtn.showsTouchWhenHighlighted=YES;
+    [toolBar addSubview:forwardBtn];
+    
+    refreshBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    [refreshBtn setImage:[UIImage imageNamed:@"wap_refresh.png"] forState:UIControlStateNormal];
+    refreshBtn.frame=CGRectMake(startPos+49*2, 0, 49, 49);
+    [refreshBtn addTarget:self action:@selector(webRefresh) forControlEvents:UIControlEventTouchUpInside];
+    refreshBtn.showsTouchWhenHighlighted=YES;
+    [toolBar addSubview:refreshBtn];
+    
+    freshIndicator=[[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
+    freshIndicator.frame=CGRectMake(startPos+49*2+10, 10, 30, 30);
+    [toolBar addSubview:freshIndicator];
+    freshIndicator.hidden=YES;
+    
+    if (wapType == 1 && groupState == 1) {     // 渐变色
+        gradientLayer=[[CAGradientLayer alloc] init];
+        [gradientLayer setFrame:CGRectMake(width-10, 0, 10, frame.size.height-49)];
+        [gradientLayer setColors:[NSArray arrayWithObjects: (id)[[UIColor clearColor] CGColor],(id)[[UIColor colorWithRed:201.0/255.0 green:201.0/255.0 blue:201.0/255.0 alpha:1.0] CGColor], nil]];
+        [gradientLayer setStartPoint:CGPointMake(0.0,0.5)];
+        [gradientLayer setEndPoint:CGPointMake(1.0,0.5)];
+        [gradientLayer setOpacity:0.1];
+        [self.view.layer addSublayer:gradientLayer];
+    }
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    [self.view setFrame:currentFrame];
+    self.view.backgroundColor=[UIColor clearColor];
+    head=[[UIImageView alloc] initWithFrame:CGRectMake(0, 0, currentFrame.size.width, 29)];
+    head.image=[[UIImage imageNamed:@"wap_head.png"] stretchableImageWithLeftCapWidth:30 topCapHeight:15];
+    [self.view addSubview:head];
+    URLstringLabel=[[UILabel alloc] initWithFrame:CGRectMake(35, 4, currentFrame.size.width-70, 20)];
+    URLstringLabel.backgroundColor=[UIColor clearColor];
+    URLstringLabel.textAlignment=NSTextAlignmentLeft;
+    URLstringLabel.numberOfLines=1;
+    URLstringLabel.lineBreakMode=UILineBreakModeTailTruncation;
+    URLstringLabel.text=self.m_UrlString;
+    URLstringLabel.font=[UIFont systemFontOfSize:12];
+    URLstringLabel.textColor=[UIColor grayColor];
+    [head addSubview:URLstringLabel];
+    
+    webView=[[UIWebView alloc] initWithFrame:CGRectMake(0, 29, currentFrame.size.width, currentFrame.size.height-49-29)];
+    webView.delegate=self;
+    
+    //    [webView sizeToFit];
+    //    self.view.autoresizesSubviews=YES;
+    //    webView.autoresizingMask=UIViewAutoresizingFlexibleHeight|UIViewAutoresizingFlexibleWidth;
+    
+    [webView setScalesPageToFit:YES];
+    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:self.m_UrlString]]];
+    [webView setBackgroundColor:[UIColor whiteColor]];
+    [self.view addSubview:webView];
+    
+    actIndicatorView=[[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
+    [actIndicatorView setFrame:CGRectMake((currentFrame.size.width-30)/2, (currentFrame.size.height-30)/2, 30, 30)];
+    [actIndicatorView setHidden:YES];
+    [self.view addSubview:actIndicatorView];
+    
+    if (wapType != 3) {
+        toolBar=[[UIToolbar alloc] initWithFrame:CGRectMake(0, currentFrame.size.height - 49, currentFrame.size.width, 49)];
+        toolBar.barStyle=UIBarStyleDefault;
+        toolBar.backgroundColor = [UIColor clearColor];
+        [self.view addSubview:toolBar];
+        
+        [self initToolBarItemsWithFrame:currentFrame];
+    }
+    
+    isRefresh=NO;
+    [self webStatus];
+    
+    [self performSelector:@selector(hiddenHead) withObject:nil afterDelay:3];
+	
+}
+
+-(void)customSizeWithFrame:(CGRect)frame{
+    
+    currentFrame = frame;
+    float width = frame.size.width;
+    float height = frame.size.height;
+    float startPos;
+    
+    [self.view.superview.layer addAnimation:[OTSNaviAnimation transactionFade] forKey:nil];
+    [self.view setFrame:frame];
+    
+    if (whiteBoardView == nil) {
+        whiteBoardView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, height-49)];
+        [whiteBoardView setBackgroundColor:[UIColor whiteColor]];
+        [self.view insertSubview:whiteBoardView belowSubview:actIndicatorView];
+    }else {
+        [whiteBoardView setFrame:CGRectMake(0, 0, width, height-49)];
+        whiteBoardView.hidden = NO;
+    }
+    if (groupState == 1) {
+        startPos = (width - 49*3)/2;
+        toSuperBtn.hidden = YES;
+        btnSepLine.hidden = YES;
+    }else if(groupState == 0)
+    {
+        startPos = (width - 49*3);
+        toSuperBtn.hidden = NO;
+        btnSepLine.hidden = NO;
+    }
+    backwardBtn.frame=CGRectMake(startPos, 0, 49, 49);
+    forwardBtn.frame=CGRectMake(startPos+49, 0, 49, 49);
+    refreshBtn.frame=CGRectMake(startPos+49*2, 0, 49, 49);
+    freshIndicator.frame = CGRectMake(startPos+49*2+10, 10, 30, 30);
+    [actIndicatorView setFrame:CGRectMake((width-30)/2, (height-30)/2, 30, 30)];
+    toolBarBgImage.frame = CGRectMake(0, -1, width, 50);
+    toolBar.frame = CGRectMake(0, height-49, width, 49);
+    webView.frame = CGRectMake(0, 0, width, height-49);
+    
+}
+
+#pragma mark - actions
+-(void)removeSelf
+{
+    //    [[OTSOnlinePayNotifier sharedInstance] retrieveOrders];
+    //    [super removeSelf];
+    
+}
+-(void)refreshWebView{
+    [webView reload];
+}
+//返回首页
+- (void)AppHome{
+    //	[self.view.superview.layer addAnimation:[OTSNaviAnimation animationPushFromLeft] forKey:@"Reveal"];
+    //    [SharedDelegate enterHomePageRoot];
+    //    [self removeSelf];
+}
+//返回入口
+- (void)gotoSuper{
+    //    [self.view.superview.layer addAnimation:[OTSNaviAnimation animationPushFromLeft] forKey:@"Reveal"];
+    //	[self removeSelf];
+    if (wapType == 1 && groupState == 0) {
+        groupState = 1;
+        
+        [self customSizeWithFrame:CGRectMake(0, 55, 768, 693)];
+        if (gradientLayer) {
+            gradientLayer.hidden = NO;
+        }
+        [self loadURL];
+        [self webStatus];
+        [[NSNotificationCenter defaultCenter] postNotificationName:kNotifyMallCartChange object:nil];
+    }else if (wapType==5||wapType==4){
+        [self.view removeFromSuperview];
+        [[NSNotificationCenter defaultCenter] postNotificationName:kNotifyMallCartChange object:nil];
+        OTS_SAFE_RELEASE(self);
+        
+    }
+    else {
+        CATransition *transition = [CATransition animation];
+        transition.duration = OTSP_TRANS_DURATION;
+        transition.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
+        transition.type =kCATransitionFade; //@"cube";
+        transition.subtype = kCATransitionFromRight;
+        transition.delegate = self;
+        [SharedPadDelegate.navigationController.view.layer addAnimation:transition forKey:nil];
+        [SharedPadDelegate.navigationController popViewControllerAnimated:NO];
+    }
+}
+
+#pragma mark webView Action
+//判断前进 后退的状态
+- (void)webStatus{
+    if ([webView canGoBack]) {
+        backwardBtn.enabled=YES;
+    }else {
+        backwardBtn.enabled=NO;
+    }
+    if ([webView canGoForward]) {
+        forwardBtn.enabled=YES;
+    }else {
+        forwardBtn.enabled=NO;
+    }
+    if (groupState == 1 && wapType == 1) {
+        backwardBtn.enabled = NO;
+        forwardBtn.enabled = NO;
+    }
+    if (groupState == 0 && wapType == 1) {   // 进入全屏的第一个页面后退按钮不可用
+        if ([webView.request.URL.absoluteString isEqualToString:groupOrderCheckHomePageURL]) {
+            backwardBtn.enabled = NO;
+        }
+    }
+}
+
+-(void)webforward{
+    [webView goForward];
+    [self webStatus];
+}
+
+-(void)webBackward{
+    [webView goBack];
+    [self webStatus];
+}
+-(void)loadURL{
+    
+    if (isNeededShowUrl) {
+        [UIView beginAnimations:nil context:nil];
+        [UIView setAnimationDuration:0.3f];
+        [UIView setAnimationCurve:UIViewAnimationCurveLinear];
+        URLstringLabel.text=self.m_UrlString;
+        head.hidden = NO;
+        webView.frame=CGRectMake(0, 29, currentFrame.size.width, currentFrame.size.height-49-29);
+        [UIView commitAnimations];
+        [self performSelector:@selector(hiddenHead) withObject:nil afterDelay:3];
+    }
+    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:self.m_UrlString]]];
+    
+}
+-(void)webRefresh{
+    isRefresh=YES;
+    [webView reload];
+}
+-(void)removeTo1MallView{
+    if (to1MallLoadView.superview != nil) {
+        [to1MallLoadView removeFromSuperview];
+        isFirstToMallWeb = NO;
+    }
+}
+
+-(void)showLoading
+{
+    [actIndicatorView setHidden:NO];
+    [actIndicatorView startAnimating];
+}
+
+-(void)hideLoading
+{
+    [actIndicatorView setHidden:YES];
+    [actIndicatorView stopAnimating];
+}
+- (void)hiddenHead{
+    [UIView beginAnimations:nil context:nil];
+    [UIView setAnimationDuration:0.3f];
+    [UIView setAnimationCurve:UIViewAnimationCurveLinear];
+    head.hidden = YES;
+    webView.frame=CGRectMake(0, 0, currentFrame.size.width, currentFrame.size.height-49);
+    [UIView commitAnimations];
+}
+#pragma mark webDelegate
+
+-(void)webViewDidStartLoad:(UIWebView *)webView{
+    if (isRefresh) {
+        refreshBtn.hidden=YES;
+        freshIndicator.hidden=NO;
+        [freshIndicator startAnimating];
+        
+    }
+    [self showLoading];
+}
+
+-(void)webViewDidFinishLoad:(UIWebView *)webView
+{
+    if (isRefresh) {
+        refreshBtn.hidden=NO;
+        freshIndicator.hidden=YES;
+        isRefresh=NO;
+        [freshIndicator stopAnimating];
+    }
+    if (whiteBoardView) {
+        whiteBoardView.hidden = YES;
+    }
+    [self webStatus];
+    [self hideLoading];
+}
+
+-(void)webView:(UIWebView *)webView didFailLoadWithError:(NSError *)error
+{
+    [self hideLoading];
+}
+
+// 弹出银联插件
+-(void)popTheUnionpayView:(UINavigationController*)aNavigate onlineOrderId:(NSNumber*)onlineOrderId
+{
+    packets = [OTSUtility requestSignature:onlineOrderId];
+    UnionpayViewCtrl = [LTInterface getHomeViewControllerWithType:1 strOrder:packets andDelegate:self];
+    [aNavigate pushViewController:UnionpayViewCtrl animated:YES];
+    [self.loadingView showInView:self.view];
+}
+
+//-------------取签名的时候，保证取到packets
+
+// 交易插件退出回调方法，需要商户客户端实现 strResult：交易结果，若为空则用户未进行交易。
+- (void) returnWithResult:(NSString *)strResult{
+
+    NSString *_respcode = @"";
+    if (strResult!=nil) {
+        NSRange range1 = [strResult rangeOfString:@"<respCode>"];
+        NSRange range3 = [strResult rangeOfString:@"</respCode>"];
+        int loca = range1.location +range1.length;
+        int len =  range3.location -loca;
+        _respcode = [strResult substringWithRange:NSMakeRange(loca,len )];
+    }
+    
+    //等待支付状态变为被处理
+    backreflushdone = NO;
+    
+    if([_respcode isEqualToString:@"0000"])
+    {
+        NSTimer *_busTimer = [NSTimer timerWithTimeInterval:0.5f target:self selector:@selector(checkOrderStatusHD:) userInfo:nil repeats:NO];
+        [[NSRunLoop currentRunLoop] addTimer:_busTimer forMode:NSRunLoopCommonModes];
+        do
+        {
+            [[NSRunLoop currentRunLoop]runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+            
+        }while (!backreflushdone);
+    }
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+
+        if ([_respcode isEqualToString:@"0000"]) {
+            MyListViewController *myListVC=[[[MyListViewController alloc] initWithNibName:@"MyListViewController" bundle:nil]autorelease];
+            [SharedPadDelegate.navigationController pushViewController:myListVC animated:YES];
+        }
+        [UnionpayViewCtrl release];
+        UnionpayViewCtrl = nil;
+        [self.loadingView hide];
+    });
+}
+
+-(void)checkOrderStatusHD:(NSDictionary *)object
+{
+    
+    OTSServiceHelper *service=[OTSServiceHelper sharedInstance];
+    
+    OrderV2 * v2 =nil;
+    
+    int timeout = 0;
+    if (_currentCheckOrderID) {
+        do {
+            v2 = [service getOrderDetailByOrderIdEx:[GlobalValue getGlobalValueInstance].token orderId:_currentCheckOrderID];
+            [NSThread sleepForTimeInterval:0.1];
+            timeout++;
+        } while (![v2.orderStatus isEqualToNumber:[NSNumber numberWithInt:4]]&&timeout<10);
+    }
+    
+    backreflushdone = YES;
+}
+
+
+- (BOOL)webView:(UIWebView *)webView shouldStartLoadWithRequest:(NSURLRequest *)request navigationType:(UIWebViewNavigationType)navigationType
+{
+    if (isFirstToMallWeb) {
+        isFirstToMallWeb = NO;
+        to1MallLoadView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, currentFrame.size.width, currentFrame.size.height-49)];
+        [to1MallLoadView setBackgroundColor:[UIColor whiteColor]];
+        
+        UIImageView* imageView = [[UIImageView alloc] initWithFrame:CGRectMake((currentFrame.size.width-300)/2, (currentFrame.size.height-49-250)/2, 300, 170)];
+        [imageView setImage:[UIImage imageNamed:@"to1Mall_ipad.png"]]; 
+        [to1MallLoadView addSubview:imageView];
+        [imageView release];
+        
+        // UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(108, 231, 200, 20)];
+        UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(imageView.frame.origin.x+75, imageView.frame.origin.y+170, 200, 20)];
+        
+        [label setText:@"正在跳转到1号商城..."];
+        [label setFont:[UIFont systemFontOfSize:16]];
+        [to1MallLoadView addSubview:label];
+        [label release];
+        
+        UIActivityIndicatorView *actView = [[UIActivityIndicatorView alloc]initWithFrame:CGRectMake(0.0f, 0.0f, 22.0f, 22.0f)];//加载等待的转圈控件
+        [actView setCenter:CGPointMake(imageView.frame.origin.x+60, imageView.frame.origin.y+180)];
+        [actView setActivityIndicatorViewStyle:UIActivityIndicatorViewStyleGray];
+        [to1MallLoadView addSubview:actView];
+        [actView startAnimating];
+        [actView release];
+        
+        [self.view addSubview:to1MallLoadView];
+        [self performSelector:@selector(removeTo1MallView) withObject:nil afterDelay:0.8];
+    }
+    NSString *requestString=[[request URL] absoluteString];
+    
+    DebugLog(@"---------\nwap loading url:\n%@\n", requestString);
+	NSArray *components=[requestString componentsSeparatedByString:@"/"];
+    //银联支付
+    if ([components count]>3 && [(NSString *)[components objectAtIndex:[components count]-3] isEqualToString:@"bankunite"]) {
+        NSString *base64TokenStr=[components objectAtIndex:[components count]-2];
+        NSData *tokenData=[GTMBase64 decodeString:base64TokenStr];
+        NSString *newToken=[[[NSString alloc] initWithData:tokenData encoding:NSUTF8StringEncoding] autorelease];
+        if (newToken!=nil && ![newToken isEqualToString:@""] && ![newToken isEqualToString:[GlobalValue getGlobalValueInstance].token]) {
+            [[OTSUserSwitcher sharedInstance] switchToMoreUserWithToken:newToken];
+        }
+        NSString *orderIdStr=[components objectAtIndex:[components count]-1];
+        long long orderId=[orderIdStr longLongValue];
+        _currentCheckOrderID = [[NSNumber numberWithLongLong:orderId] copy];
+        [self popTheUnionpayView:SharedPadDelegate.navigationController onlineOrderId:[NSNumber numberWithLongLong:orderId]];
+//        [self removeSelf];
+        return NO;
+    }
+    
+    //团购支付
+    NSRange rgLognin = [requestString rangeOfString:@"/mw/login"];
+    if (([components count]>5 && [(NSString *)[components objectAtIndex:[components count]-3] isEqualToString:@"grporder"]) || rgLognin.location != NSNotFound) {
+        if (wapType == 1) {
+            
+            groupState = 0;
+            [self customSizeWithFrame:CGRectMake(0, 0, 1024, 748)];
+            if (gradientLayer) {
+                gradientLayer.hidden = YES;
+            }
+        }
+        
+        if (groupOrderCheckHomePageURL) {
+            [groupOrderCheckHomePageURL release];
+            groupOrderCheckHomePageURL = nil;
+        }
+        groupOrderCheckHomePageURL = [[NSString alloc] initWithString:requestString];
+    }
+    
+    /*      NSString* str  = (NSString *)[components objectAtIndex:[components count]-3];
+     NSRange rgCheckOrder = [requestString rangeOfString:@"/mw/grporder"];
+     
+     if (rgCheckOrder.location != NSNotFound || rgLognin.location != NSNotFound) {
+     [self customSizeWithFrame:CGRectMake(0, 0, 1024, 748)];
+     groupState = 0;
+     if (groupOrderCheckHomePageURL) {
+     [groupOrderCheckHomePageURL release];
+     groupOrderCheckHomePageURL = nil;
+     }
+     groupOrderCheckHomePageURL = [[NSString alloc] initWithString:requestString];
+     }
+     */
+    
+    
+    //稍后支付
+    if ([components count]>2 && [(NSString *)[components objectAtIndex:[components count]-2] isEqualToString:@"layerpay"]) {
+        NSString *base64TokenStr=[components objectAtIndex:[components count]-1];
+        NSData *tokenData=[GTMBase64 decodeString:base64TokenStr];
+        NSString *newToken=[[[NSString alloc] initWithData:tokenData encoding:NSUTF8StringEncoding] autorelease];
+        if (newToken!=nil && ![newToken isEqualToString:@""] && ![newToken isEqualToString:[GlobalValue getGlobalValueInstance].token]) {
+            [[OTSUserSwitcher sharedInstance] switchToMoreUserWithToken:newToken];
+        }
+        // [SharedDelegate enterHomePageRoot];
+        CATransition *transition = [CATransition animation];
+        transition.duration = OTSP_TRANS_DURATION;
+        transition.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
+        transition.type =kCATransitionFade; //@"cube";
+        transition.subtype = kCATransitionFromRight;
+        transition.delegate = self;
+        [SharedPadDelegate.navigationController.view.layer addAnimation:transition forKey:nil];
+        
+        [SharedPadDelegate.navigationController popToRootViewControllerAnimated:NO];
+        //[self removeSelf];
+        
+        return NO;
+    }
+    
+    //网上支付成功
+    if ([components count]>2 && [(NSString *)[components objectAtIndex:[components count]-2] isEqualToString:@"mallpayok"]) {
+        NSString *base64TokenStr=[components objectAtIndex:[components count]-1];
+        NSData *tokenData=[GTMBase64 decodeString:base64TokenStr];
+        NSString *newToken=[[[NSString alloc] initWithData:tokenData encoding:NSUTF8StringEncoding] autorelease];
+        if (newToken!=nil && ![newToken isEqualToString:@""] && ![newToken isEqualToString:[GlobalValue getGlobalValueInstance].token]) {
+            [[OTSUserSwitcher sharedInstance] switchToMoreUserWithToken:newToken];
+        }
+        //[SharedDelegate enterMyStoreWithUpdate:YES];
+        CATransition *transition = [CATransition animation];
+        transition.duration = OTSP_TRANS_DURATION;
+        transition.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
+        transition.type =kCATransitionFade; //@"cube";
+        transition.subtype = kCATransitionFromRight;
+        transition.delegate = self;
+        [SharedPadDelegate.navigationController.view.layer addAnimation:transition forKey:nil];
+        MyListViewController *myListVC=[[[MyListViewController alloc] initWithNibName:@"MyListViewController" bundle:nil]autorelease];
+        [SharedPadDelegate.navigationController pushViewController:myListVC animated:NO];
+        //[self removeSelf];
+        return NO;
+    }
+    
+    //1号商城登陆取消了
+    //1号商城联合登录
+//    if ([components count]>2 && [(NSString *)[components objectAtIndex:[components count]-2] isEqualToString:@"1malltoclient"]) {
+//        NSString *base64TokenStr=[components objectAtIndex:[components count]-1];
+//        NSData *tokenData=[GTMBase64 decodeString:base64TokenStr];
+//        NSString *newToken=[[[NSString alloc] initWithData:tokenData encoding:NSUTF8StringEncoding] autorelease];
+//        if (newToken!=nil && ![newToken isEqualToString:@""] && ![newToken isEqualToString:[GlobalValue getGlobalValueInstance].token]) {
+//            
+//            DebugLog(@"mall token:%@", newToken);
+//            [[OTSUserSwitcher sharedInstance] switchToMoreUserWithToken:newToken];
+//            [[OTSUserSwitcher sharedInstance] changeProvinceForToken:newToken];//将token切换到当前省份
+//            [[UserManageTool sharedInstance] SetUnionLogin:LOGIN_TYPE_STORE_STR];
+//            [self.view removeFromSuperview];
+//            
+//            UIView *topView = SharedPadDelegate.navigationController.topViewController.view;
+//            [[topView viewWithTag:kLoginViewTag] removeFromSuperview];
+//            
+//            [[NSNotificationCenter defaultCenter] postNotificationName:kNotifyCloseLoginVC object:nil];
+//            [[NSNotificationCenter defaultCenter] postNotificationName:kNotifyTopViewShowUser object:nil];
+//        }
+//        //[[NSNotificationCenter defaultCenter] postNotificationName:@"OneMallUnionLoginOK" object:nil];
+//        //[self removeSelf];
+//        return NO;
+//    }
+    
+    //重新购买，刷新购物车
+    if ( [requestString rangeOfString:@"cart"].location!=NSNotFound||[requestString rangeOfString:@"cancelorder"].location!=NSNotFound) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:kNotifyMallCartChange object:nil];
+    }
+    //过滤掉website定位省份
+    NSRange range=[requestString rangeOfString:@"?cid=&uid=&website_id="];
+    if (range.location!=NSNotFound) {
+        return NO;
+    }
+    range=[requestString rangeOfString:@"/mw/getproidbygeo"];
+    if (range.location!=NSNotFound) {
+        return NO;
+    }
+    
+    //记录1mall传回的token
+    [[OTSUserSwitcher sharedInstance] handleWapReuestString:requestString];
+    
+    return YES;
+}
+
+
+
+- (void)viewDidUnload
+{
+    [super viewDidUnload];
+    // Release any retained subviews of the main view.
+}
+
+- (void)dealloc{
+    
+    [m_UrlString release];
+    if (to1MallLoadView != nil) {
+        [to1MallLoadView release];
+    }
+    if (actIndicatorView!=nil) {
+        [actIndicatorView release];
+        actIndicatorView=nil;
+    }
+    if (freshIndicator != nil) {
+        [freshIndicator release];
+    }
+    if (URLstringLabel != nil) {
+        [URLstringLabel release];
+        URLstringLabel = nil;
+    }
+    if (btnSepLine!= nil) {
+        [btnSepLine release];
+        btnSepLine = nil;
+    }
+    if (groupOrderCheckHomePageURL) {
+        [groupOrderCheckHomePageURL release];
+    }
+    if (head != nil) {
+        [head release];
+    }
+    if (whiteBoardView != nil) {
+        [whiteBoardView release];
+    }
+    if (toolBarBgImage != nil) {
+        [toolBarBgImage release];
+        toolBarBgImage = nil;
+    }
+    if (webView != nil) {
+        [webView release];
+        webView = nil;
+    }
+    if (toolBar != nil) {
+        [toolBar release];
+        toolBar = nil;
+    }
+    if (gradientLayer != nil) {
+        [gradientLayer release];
+    }
+    if (_currentCheckOrderID !=nil) {
+        [_currentCheckOrderID release];
+    }
+    [super dealloc];
+}
+
+@end

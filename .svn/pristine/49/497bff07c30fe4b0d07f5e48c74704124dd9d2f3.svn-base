@@ -1,0 +1,36 @@
+//
+// Prefix header for all source files of the 'TheStoreApp' target in the 'TheStoreApp' project
+//
+
+#ifdef __OBJC__
+#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
+#endif
+
+#import "OTSEverybodyWantsMe.h"
+#import "OTSBaseViewController.h"
+#import "OTSUserSwitcher.h"
+#import "OTSUserLoginHelper.h"
+#import <objc/runtime.h>
+#import "OTSPhoneRuntimeData.h"
+#import "NSMutableArray+Stack.h"
+
+
+#import "UIView+Common.h"
+#import "UIDevice+Common.h"
+#import "UIColor+Common.h"
+#import "NSString+Common.h"
+
+
+#define STANDARD_NAVIGATION_ENABLED     // 使用标准的导航方式
+
+#define STR_TOKEN_IS_NULL       @"tokenIsNull"
+#define CATE_DISSMISS_SELECTION @"cate_dismissSelection"
+
+#define LOG_THE_METHORD    NSLog(@"'%@' called", NSStringFromSelector(_cmd));
+
+#define kNotifyWRInventoryCellUpdateTime    @"kNotifyWRInventoryCellUpdateTime"
+
+#define OTS_DOC_PATH    [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES) objectAtIndex:0]
+
+#define OTS_IPHONE_NAVI_BAR_HEIGHT      44  // 导航条高度

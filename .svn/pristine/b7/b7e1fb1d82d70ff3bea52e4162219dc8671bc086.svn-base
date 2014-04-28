@@ -1,0 +1,28 @@
+//
+//  OTSOrderSubmitOKVC.h
+//  TheStoreApp
+//
+//  Created by yiming dong on 12-7-27.
+//  Copyright (c) 2012年 __MyCompanyName__. All rights reserved.
+//  描述：此类为订单完成的view controller
+
+#import <UIKit/UIKit.h>
+#import "OTSTableViewDelegate.h"
+
+@class OrderV2;
+
+
+@interface OTSOrderSubmitOKVC : OTSBaseViewController <OTSTableViewDelegate>
+{
+    long long int               orderId;
+    OrderV2                     *order;
+    
+    BOOL                        isOrderDetailOK;
+    BOOL                        isBankListOK;
+}
+
+//@property BOOL      isOrderFullyPayed;  //全额支付
+
+-(id)initWithOrderId:(long long int)aOrderId;
+-(void)toHomePageAction;
+@end

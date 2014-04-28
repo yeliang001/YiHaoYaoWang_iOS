@@ -1,0 +1,505 @@
+//
+//  BalanceDetailedUse.m
+//  TheStoreApp
+//
+//  Created by xuexiang on 12-7-10.
+//  Copyright 2012 OneTheStore. All rights reserved.
+//
+
+#import "BalanceDetailedUse.h"
+#import<QuartzCore/QuartzCore.h>
+#import "OTSActionSheet.h"
+#import "TheStoreAppAppDelegate.h"
+#import "PayService.h"
+#import "UserAccountLogVO.h"
+#import "Page.h"
+
+@interface BalanceDetailedUse ()
+@property(nonatomic)CGRect orignTypeFrame;
+-(float)contentHeight;
+@end
+
+@implementation BalanceDetailedUse
+
+@synthesize amount;
+@synthesize availableAmount;
+@synthesize frozenAmount;
+@synthesize orignTypeFrame;
+@synthesize avalablaeCardFee;
+@synthesize frozenCardFee;
+
+-(float)contentHeight
+{
+    return self.view.frame.size.height -  OTS_IPHONE_NAVI_BAR_HEIGHT;
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor redColor];
+	[m_tableView setBackgroundColor:[UIColor colorWithRed:0.9294 green:0.9294 blue:0.9294 alpha:1.0]];
+	[m_scrollView setBackgroundColor:[UIColor colorWithRed:0.9294 green:0.9294 blue:0.9294 alpha:1.0]];
+    
+    CGRect rc = m_scrollView.frame;
+    rc.size.height = self.view.frame.size.height - NAVIGATION_BAR_HEIGHT;
+    [m_scrollView setFrame:rc];
+    
+    CGRect rc1 = m_tableView.frame;
+    rc1.size.height = rc.size.height - 134 - 37;
+    [m_tableView setFrame:rc1];
+    
+    [m_scrollView setAlwaysBounceVertical:YES];
+    self.orignTypeFrame = m_TypeView.frame;
+    
+	m_LoadMoreLabel = [[LoadingMoreLabel alloc] initWithFrame:CGRectMake(0, m_scrollView.contentSize.height-40, 320, 40)];
+	//初始化余额
+//	if (amount != nil && [amount doubleValue] != 0) {
+//		[balanceTotalLabel setText:[NSString stringWithFormat:@"￥%.2f",[amount doubleValue]]];
+//	}
+	if (availableAmount != nil && [availableAmount doubleValue] != 0) {
+		[balanceCanUseLabel setText:[NSString stringWithFormat:@"￥%.2f",[availableAmount doubleValue]]];
+	}
+	if (frozenAmount != nil && [frozenAmount doubleValue] != 0) {
+		[balanceFrozenLabel setText:[NSString stringWithFormat:@"￥%.2f",[frozenAmount doubleValue]]];
+	}
+    if (avalablaeCardFee != nil && [avalablaeCardFee doubleValue] != 0) {
+		[cardAvalableFeeLabel setText:[NSString stringWithFormat:@"￥%.2f",[avalablaeCardFee doubleValue]]];
+	}
+    if (frozenCardFee != nil && [frozenCardFee doubleValue] != 0) {
+		[cardForzenFeeLabel setText:[NSString stringWithFormat:@"￥%.2f",[frozenCardFee doubleValue]]];
+	}
+
+
+	//空态时的页面
+	nullView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, ApplicationHeight, self.contentHeight)];
+    //nullView.backgroundColor = [UIColor whiteColor];
+	[nullView setBackgroundColor:[UIColor colorWithRed:0.9294 green:0.9294 blue:0.9294 alpha:1.0]];
+	nullLabel = [[UILabel alloc] initWithFrame:CGRectMake((ApplicationWidth-280)/2, self.contentHeight/2+20, 280, 20)];
+	[nullLabel setFont:[UIFont systemFontOfSize:14]];
+    [nullLabel setTextAlignment:NSTextAlignmentCenter];
+	[nullLabel setBackgroundColor:[UIColor clearColor]];
+    [nullLabel setTextColor:[UIColor colorWithRed:140.0/255 green:140.0/255 blue:140.0/255 alpha:1.0]];
+	[nullView addSubview:nullLabel];
+    [m_scrollView addSubview:nullView];
+	m_DetailArray = [[NSMutableArray alloc]init];
+	m_currentPageIndex = 1;
+	m_amountDirection = -1;
+    
+	[self setUpThread];
+}
+#pragma mark actions
+//返回上一页
+-(IBAction)backToPrevious:(id)sender{
+	CATransition* animation = [CATransition animation];
+	animation.duration = 0.3;
+	animation.timingFunction =  UIViewAnimationCurveEaseInOut;
+	animation.type = kCATransitionPush;
+	animation.subtype = kCATransitionFromLeft;
+	[self.view.superview.layer addAnimation:animation forKey:@"Reveal"];
+	[self removeSelf];
+}
+//拨打客服电话
+-(IBAction)telePhone:(id)sender{
+	UIActionSheet *actionSheet=[[OTSActionSheet alloc] initWithTitle:@"客服工作时间 : 每日 9:00-21:00" delegate:self cancelButtonTitle:@"取消" destructiveButtonTitle:nil otherButtonTitles:@"400-007-1111", nil];
+    [actionSheet showInView:[UIApplication sharedApplication].keyWindow];
+    [actionSheet release];
+}
+//按类型获取数据
+-(IBAction)typeBtnClicked:(id)sender {
+    UIButton *currentButton=sender;
+    if ([currentButton tag]==m_currentBtnTag || m_ThreadRunning) {
+        return;
+    }
+    m_currentBtnTag=[currentButton tag];
+	
+	m_currentPageIndex = 1;
+	m_DetailTotalCount = 0;
+	maxPage = 1;
+	if (m_DetailArray != nil) {
+		[m_DetailArray removeAllObjects];
+	}
+	[m_scrollView scrollRectToVisible:CGRectMake(0, 135, 320,330) animated:NO];
+	//[m_scrollView setContentSize:CGSizeMake(320, 330)];
+    
+    for (UIView *view in [m_TypeView subviews]) {
+        if ([view isKindOfClass:[UIButton class]]) {
+            UIButton *button=(UIButton *)view;
+            [button setBackgroundImage:[UIImage imageNamed:@"sort_unsel.png"] forState:UIControlStateNormal];
+            [button setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+        }
+    }
+    [currentButton setBackgroundImage:[UIImage imageNamed:@"sort_sel.png"] forState:UIControlStateNormal];
+    [currentButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    
+    switch (m_currentBtnTag) {
+        case 0: {//全部
+			m_amountDirection = -1;
+			[self setUpThread];
+            break;
+        }
+        case 1: {//存入
+            m_amountDirection = 1;
+            [self setUpThread];
+            break;
+        }
+        case 2: {//支出
+            m_amountDirection = 0;
+            [self setUpThread];
+            break;
+        }
+        default:
+            break;
+    }
+}
+#pragma mark 更新tableview
+-(BOOL)isAmountEffect:(NSNumber*)Fee{
+    if(Fee && [Fee doubleValue]>0.0){
+        return YES;
+    }else
+        return NO;
+}
+-(void)updateDetailTable{
+	if ([m_DetailArray count] == 0 || m_DetailArray == nil) { // 空态页面的显示
+		[m_tableView setHidden:YES];
+		[nullView setHidden:NO];
+		[m_scrollView setScrollEnabled:YES];
+		// 查看目类
+		if (m_amountDirection == -1) {
+			[nullLabel setText:@"暂无余额使用记录"];
+		}else if (m_amountDirection == 1) {
+			[nullLabel setText:@"暂无余额存入记录"];
+		}else if (m_amountDirection == 0) {
+			[nullLabel setText:@"暂无余额支出记录"];
+		}
+		// 确定空态页面显示位置
+		if (m_amountDirection == -1 && ![self isAmountEffect:availableAmount] && ![self isAmountEffect:avalablaeCardFee] && ![self isAmountEffect:frozenAmount] && ![self isAmountEffect:frozenCardFee]) {  // 即无余额也无冻结，也无使用记录。显示全局空态页面
+            [nullLabel setText:@"账户余额为0，暂无余额使用记录"];
+            [m_scrollView setScrollEnabled:NO];
+		}else{
+            CGRect rc = nullView.frame;
+            rc.origin.y = CGRectGetMaxY(m_TypeView.frame)+1;
+            rc.size.height = CGRectGetHeight(m_scrollView.frame)-rc.origin.y;
+            [nullView setFrame:rc];
+        }
+        
+        UIView* v1 = [m_scrollView viewWithTag:10001];
+        if (v1) {
+            [v1 removeFromSuperview];
+        }
+        UIImageView *nullImage = [[UIImageView alloc] initWithFrame:CGRectMake((ApplicationWidth-125)/2, (nullView.frame.size.height-100)/2-44, 125, 100)];
+        [nullImage setImage:[UIImage imageNamed:@"piggy"]];
+        [nullImage setTag:10001];
+        [nullView addSubview:nullImage];
+        [nullImage release];
+        
+        CGRect rc = nullLabel.frame;
+        rc.origin.y = CGRectGetMaxY(nullImage.frame)+15;
+        [nullLabel setFrame:rc];
+        
+	}else {													// 非空态页面
+		[m_tableView setHidden:NO];
+		[nullView setHidden:YES];
+		[m_scrollView setScrollEnabled:YES];
+        [m_tableView reloadData];
+        CGRect rc = m_tableView.frame;
+        rc.size.height = [m_DetailArray count]*133;
+        [m_tableView setFrame:rc];
+        [m_scrollView setContentSize:CGSizeMake(ApplicationWidth, [m_DetailArray count]*133+37+134+40)];
+        
+		[m_tableView reloadData];
+		if (m_LoadMoreLabel.superview != nil) {
+			[m_LoadMoreLabel removeFromSuperview];
+		}
+		if (maxPage >= m_currentPageIndex) {//加载更多
+			[m_LoadMoreLabel setFrame:CGRectMake(0, m_scrollView.contentSize.height-40, 320, 40)];
+            [m_scrollView setAlwaysBounceVertical:YES];
+			[m_scrollView addSubview:m_LoadMoreLabel];
+		}
+	}
+    
+}
+#pragma mark 获取更多
+-(void)getMoreDetail
+{
+	m_isLoadingMore = YES;
+    [self setUpThread];
+}
+#pragma mark scrollview相关delegate
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView{
+    if (scrollView == m_scrollView && scrollView.contentOffset.y >= 137 && m_TypeView.frame.origin.y != scrollView.frame.origin.y) {
+        CGRect rc = m_TypeView.frame;
+        rc.origin.y = m_scrollView.frame.origin.y;
+        [m_TypeView setFrame:rc];
+        [self.view addSubview:m_TypeView];
+    }else if (m_TypeView.frame.origin.y == scrollView.frame.origin.y && scrollView.contentOffset.y <= 137){
+        [m_TypeView setFrame:self.orignTypeFrame];
+        [m_scrollView addSubview:m_TypeView];
+    }
+	if (m_DetailArray == nil || maxPage <= m_currentPageIndex -1) { //m_currentPageIndex 实际上是下一页的页数
+        return;
+    }
+	[m_LoadMoreLabel scrollViewDidScroll:scrollView selector:@selector(getMoreDetail) target:self];
+    
+//    CGFloat sectionHeaderHeight = 37;
+//    if (scrollView.contentOffset.y<=sectionHeaderHeight&&scrollView.contentOffset.y>=0) {
+//        scrollView.contentInset = UIEdgeInsetsMake(scrollView.contentOffset.y, 0, 0, 0);
+//    } else if (scrollView.contentOffset.y>=sectionHeaderHeight) {
+//        scrollView.contentInset = UIEdgeInsetsMake(sectionHeaderHeight, 0, 0, 0);
+//    }
+}
+#pragma mark    新线程相关
+-(void)setUpThread {
+	if (!m_ThreadRunning) {
+		m_ThreadRunning=YES;
+        [self showLoading:!m_isLoadingMore];
+		[self otsDetatchMemorySafeNewThreadSelector:@selector(startThread) toTarget:self withObject:nil];
+	}
+}
+
+
+//开启线程
+-(void)startThread {
+	while (m_ThreadRunning) {
+		//获取相关明细信息
+		NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
+		PayService *ser = [[PayService alloc]init];
+		@try {
+			Page *page = [ser getUserAcountLogList:[GlobalValue getGlobalValueInstance].token 
+											sattus:[NSNumber numberWithInt:-1] 
+											  type:[NSNumber numberWithInt:-1] 
+								   amountDirection:[NSNumber numberWithInt:m_amountDirection] 
+									   currentPage:[NSNumber numberWithInt:m_currentPageIndex] 
+										  pageSize:[NSNumber numberWithInt:10]];
+			if (![page isKindOfClass:[NSNull class]] && page != nil) {
+				for (int i = 0; i < [[page objList] count]; i++) {
+					[m_DetailArray addObject:[[page objList] objectAtIndex:i]];
+				}
+				m_DetailTotalCount = [[page totalSize] intValue];
+				maxPage = ceil(m_DetailTotalCount/10.0);
+				m_currentPageIndex++;
+			}else {
+				m_DetailTotalCount = 0;
+			}
+			[self performSelectorOnMainThread:@selector(updateDetailTable) withObject:nil waitUntilDone:NO];
+			[m_LoadMoreLabel performSelectorOnMainThread:@selector(reset) withObject:nil waitUntilDone:NO];
+		}
+		@catch (NSException *exception) {
+		}
+		@finally {
+			[ser release];
+			[pool drain];
+			[self stopThread];
+		}
+	}
+}
+
+//停止线程
+-(void)stopThread {
+	m_ThreadRunning=NO;
+    m_isLoadingMore = NO;
+    [self hideLoading];
+}
+#pragma mark actionsheet相关delegate
+-(void)actionSheet:(UIActionSheet *)actionSheet didDismissWithButtonIndex:(NSInteger)buttonIndex {
+    switch (buttonIndex) {
+        case 0: {
+            UIDeviceHardware *hardware=[[UIDeviceHardware alloc] init];
+            //判断设备是否iphone
+            /* if (!([[hardware platformString] isEqualToString:@"iPhone 1G"] || 
+             [[hardware platformString] isEqualToString:@"iPhone 3G"] || 
+             [[hardware platformString] isEqualToString:@"iPhone 3GS"] || 
+             [[hardware platformString] isEqualToString:@"iPhone 4"] || 
+             [[hardware platformString] isEqualToString:@"Verizon iPhone 4"])) */
+            NSRange range = [[hardware platformString] rangeOfString:@"iPhone"];
+            if (range.length <= 0) {
+                [[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+                [AlertView showAlertView:nil alertMsg:@"您的设备不支持此项功能,感谢您对1号店的支持!" buttonTitles:nil alertTag:ALERTVIEW_TAG_COMMON];
+            } else {
+                [[UIApplication sharedApplication] openURL:[NSURL URLWithString:@"tel://4000071111"]];
+            }
+            [hardware release];
+            break;
+        }
+        default:
+            break;
+    }
+}
+#pragma mark tableView相关的delegate
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section{
+	return 2;
+}
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
+	UITableViewCell *cell = [[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"balance"] autorelease];
+	int row = [indexPath row];
+	int section = [indexPath section];
+	cell.selectionStyle = UITableViewCellSelectionStyleNone;
+	UserAccountLogVO *accountVO = [OTSUtility safeObjectAtIndex:section inArray:m_DetailArray];
+	if (row == 0) {
+		//类型
+		UILabel *typeLabel = [[UILabel alloc]initWithFrame:CGRectMake(20, 5, 100, 30)];
+		[typeLabel setBackgroundColor:[UIColor clearColor]];
+		[typeLabel setText:accountVO.accountType];
+		[typeLabel setFont:[UIFont systemFontOfSize:16]];
+		[cell addSubview:typeLabel];
+		[typeLabel release];
+		//时间
+		UILabel *timeLabel = [[UILabel alloc]initWithFrame:CGRectMake(20, 35, 130, 20)];
+		[timeLabel setBackgroundColor:[UIColor clearColor]];
+		[timeLabel setText:accountVO.createTime];
+		[timeLabel setFont:[UIFont systemFontOfSize:12]];
+		[timeLabel setTextColor:[UIColor lightGrayColor]];
+		[cell addSubview:timeLabel];
+		[timeLabel release];
+		//状态
+		UILabel *statusLabel = [[UILabel alloc]initWithFrame:CGRectMake(260, 5, 35, 30)];
+		[statusLabel setBackgroundColor:[UIColor clearColor]];
+		if ([accountVO.accountStatus isEqualToString:@"1"]) {
+			[statusLabel setText:@"成功"];
+		}else if ([accountVO.accountStatus isEqualToString:@"2"]) {
+			[statusLabel setText:@"冻结"];
+		}else if ([accountVO.accountStatus isEqualToString:@"3"]) {
+			[statusLabel setText:@"失败"];
+		}
+		[statusLabel setFont:[UIFont systemFontOfSize:16]];
+		[statusLabel setTextColor:[UIColor blackColor]];
+		[cell addSubview:statusLabel];
+		[statusLabel release];
+		//金额
+		UILabel *moneyLabel = [[UILabel alloc]initWithFrame:CGRectMake(175, 31, 120, 25)];
+		[moneyLabel setBackgroundColor:[UIColor clearColor]];
+		double moneyDouble = [accountVO.money doubleValue];
+		
+		if ([accountVO.accountStatus isEqualToString:@"2"]){						// 冻结
+			[moneyLabel setTextColor:[UIColor blackColor]];
+			[moneyLabel setText:[NSString stringWithFormat:@"￥%.2f",ABS(moneyDouble)]];
+		}else
+		if (moneyDouble < 0) {														// 支出
+			[moneyLabel setTextColor:[UIColor redColor]];
+			[moneyLabel setText:[NSString stringWithFormat:@"-      ￥%.2f",ABS(moneyDouble)]];
+		}else {																		// 存入
+			[moneyLabel setTextColor:[UIColor colorWithRed:0.0039 green:0.6667 blue:0.0588 alpha:1.0]];
+			[moneyLabel setText:[NSString stringWithFormat:@"+      ￥%.2f",ABS(moneyDouble)]];
+		}
+		[moneyLabel setFont:[UIFont systemFontOfSize:16]];
+		[moneyLabel setTextAlignment:UITextAlignmentRight];
+		[cell addSubview:moneyLabel];
+		[moneyLabel release];
+	}else if(row == 1){
+		//说明
+		if (accountVO.accountRemark != nil && ![accountVO.accountRemark isEqualToString:@""]) {
+			UILabel *remarkLabel = [[UILabel alloc]initWithFrame:CGRectMake(20, 0, 260, 55)];
+			[remarkLabel setBackgroundColor:[UIColor clearColor]];
+			[remarkLabel setText:accountVO.accountRemark];
+			[remarkLabel setFont:[UIFont systemFontOfSize:16]];
+			//[remarkLabel setTextColor:[UIColor greenColor]];
+			[remarkLabel setNumberOfLines:0];
+			[cell addSubview:remarkLabel];
+			[remarkLabel release];
+		}else {
+			UILabel *telePhoneLabel = [[UILabel alloc]initWithFrame:CGRectMake(20, 0, 72, 55)];
+			[telePhoneLabel setBackgroundColor:[UIColor clearColor]];
+			[telePhoneLabel setText:@"联系客服"];
+			[telePhoneLabel setFont:[UIFont systemFontOfSize:16]];
+			//[remarkLabel setTextColor:[UIColor greenColor]];
+			[cell addSubview:telePhoneLabel];
+			[telePhoneLabel release];
+			
+			UILabel *numberLabel = [[UILabel alloc]initWithFrame:CGRectMake(92, 0, 160, 55)];
+			[numberLabel setBackgroundColor:[UIColor clearColor]];
+			[numberLabel setText:@"(400-007-1111)"];
+			[numberLabel setFont:[UIFont systemFontOfSize:16]];
+			[numberLabel setTextColor:[UIColor lightGrayColor]];
+			[cell addSubview:numberLabel];
+			[numberLabel release];
+			
+			cell.tag = 100;
+			//cell.selectionStyle = UITableViewCellSelectionStyleBlue;
+		}
+	}
+	return cell;
+}
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath{
+	UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+	if (cell.tag == 100) {
+		[self telePhone:nil];
+	}
+}
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView{
+	return [m_DetailArray count];
+}
+- (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section{
+	UIView *tview = [[[UIView alloc]initWithFrame:CGRectMake(0, 0, 320, 8)] autorelease];
+	[tview setBackgroundColor:[UIColor clearColor]];
+	return tview;
+}
+- (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section{
+	UIView *tview = [[[UIView alloc]initWithFrame:CGRectMake(0, 0, 320, 8)] autorelease];
+	[tview setBackgroundColor:[UIColor clearColor]];
+	return tview;
+}
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section{
+	return 8;
+}
+- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section{
+	return 8;
+}
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
+	if ([indexPath row] == 0) {
+		return 60;	
+	}else {
+		return 55;
+	}
+}
+#pragma mark 内存管理
+- (void)didReceiveMemoryWarning {
+    // Releases the view if it doesn't have a superview.
+    [super didReceiveMemoryWarning];
+    
+    // Release any cached data, images, etc. that aren't in use.
+}
+-(void)releaseResource{
+    if (m_DetailArray != nil) {
+		[m_DetailArray release];
+		m_DetailArray = nil;
+	}
+	if (m_LoadMoreLabel != nil) {
+		[m_LoadMoreLabel release];
+		m_LoadMoreLabel = nil;
+	}
+	if (nullView != nil) {
+		[nullView release];
+		nullView = nil;
+	}
+	if (nullLabel != nil) {
+		[nullLabel release];
+		nullLabel = nil;
+	}
+	if (amount != nil) {
+        [amount release];
+        amount = nil;
+    }
+    if (availableAmount != nil) {
+        [availableAmount release];
+        availableAmount = nil;
+    }
+    if (frozenAmount != nil) {
+        [frozenAmount release];
+        frozenAmount = nil;
+    }
+    OTS_SAFE_RELEASE(avalablaeCardFee);
+    OTS_SAFE_RELEASE(frozenCardFee);
+}
+- (void)viewDidUnload {
+	[self releaseResource];
+    [super viewDidUnload];
+    // Release any retained subviews of the main view.
+    // e.g. self.myOutlet = nil;
+}
+
+
+- (void)dealloc {
+	[self releaseResource];
+    [super dealloc];
+}
+
+
+@end

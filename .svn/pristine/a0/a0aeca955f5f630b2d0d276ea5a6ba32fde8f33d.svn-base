@@ -1,0 +1,37 @@
+//
+//  YWAddressService.h
+//  TheStoreApp
+//
+//  Created by LinPan on 13-8-20.
+//
+//
+
+#import <Foundation/Foundation.h>
+#import "BaseService.h"
+#import "GoodReceiverVO.h"
+
+
+#define kAddressDB @"yw_address.sqlite"
+
+//省，市，区 的对应model类
+@interface AddressInfo : NSObject
+
+@property (copy, nonatomic) NSString *addresssName;
+@property (copy, nonatomic) NSString *addressId;
+
+@end
+
+
+
+
+@interface YWAddressService : BaseService
+
+- (NSMutableArray *)getCountiesByCityId:(NSString *)cityId;
+- (NSMutableArray *)getCitiesByProvinceId:(NSString *)pid;
+- (NSMutableArray *)getAllProvince;
+
+- (BOOL)addNewGoodReceiver:(GoodReceiverVO *)recevic;
+- (BOOL)updateGoodReceiver:(GoodReceiverVO *)recevice;
+- (BOOL)deleteGoodRecevicer:(NSString *)addressId;
+- (NSMutableArray *)getMyGoodRecevicer;
+@end

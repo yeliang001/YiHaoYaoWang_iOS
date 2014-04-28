@@ -1,0 +1,1649 @@
+//
+//  CategoryProductsViewController.m
+//  TheStoreApp
+//
+//  Created by jun yuan on 12-9-19.
+//  Copyright (c) 2012年 __MyCompanyName__. All rights reserved.
+//
+
+#import "CategoryProductsViewController.h"
+#import "Trader.h"
+#import "SearchVO.h"
+#import "SearchService.h"
+#import "GlobalValue.h"
+#import "DoTracking.h"
+#import "ProductVO.h"
+#import "CategoryVO.h"
+#import "SDWebDataManager.h"
+#import "OTSMfImageCache.h"
+#import "OTSAlertView.h"
+#import "AddProductResult.h"
+#import "CartService.h"
+#import "LocalCartItemVO.h"
+#import "CategoryProductCell.h"
+#import "TheStoreAppAppDelegate.h"
+#import "CategoryViewController.h"
+#import "CategorySelectionCell.h"
+#import "UITableView+LoadingMore.h"
+#import "NSMutableArray+Stack.h"
+#import "OTSProductDetail.h"
+#import "SearchParameterVO.h"
+#import "SearchCategoryVO.h"
+#import "ProductService.h"
+#import "BrowseService.h"
+#import "MobilePromotionVO.h"
+#import "OTSEverybodyWantsMe.h"
+#import "GTMBase64.h"
+#import "SDImageView+SDWebCache.h"
+#import "YWSearchService.h"
+#import "SearchResultInfo.h"
+#import "ProductInfo.h"
+#import "CategoryInfo.h"
+#define RED_TEXT_COLOR [UIColor colorWithRed:0.72 green:0.09 blue:0.07 alpha:1]
+#define SORT_BY_DEFAULT 5
+#define SORT_BY_SALE 0
+#define SORT_BY_PRICE_ASC 1
+#define SORT_BY_PRICE_DESC 2
+#define SORT_BY_COMMENT_DESC 3
+#define SORT_BY_TIME 4
+
+#define GOODS_TAG 100
+#define MARKET_PRICE_TAG 105
+#define PRICE_TAG 101
+#define HAVE_GOODS_TAG 102
+#define BUTTON_TAG 103
+#define DEFAULT_IMAGE_TAG 104
+#define SHOPPING_COUNT_TAG 109
+
+#define TABLEVIEW_NODECATEGOTY_CELL_HEIGHT 101
+#define LOADMORE_HEIGHT     40
+
+#define ALERTVIEW_TAG_NET_EXCEPTION 300
+#define ALERTVIEW_TAG_OTHERS 302
+
+#define BACKUPLEVEL  @"返回上级"
+#define URL_BASE_MALL_NO_ONE                        @"http://m.1mall.com/mw/product/"
+
+
+
+
+@interface CategoryProductsViewController ()
+@property(retain) NSMutableArray* selectionArray;
+@property(retain) NSMutableArray* productsArray;//由网络获取的商品数据
+@property(retain) NSMutableArray* trackCategoryIdArray;//实现一个stack，存储返回上级分类的id
+@property(retain) NSMutableDictionary* trackCategoryDic;
+@property(nonatomic, retain)NSNumber* isDianzhongDian;
+@property(nonatomic, retain)CartAnimation* cartAnimation;
+@property(nonatomic)BOOL isCratAnimation;
+@end
+
+@implementation CategoryProductsViewController
+@synthesize cateId;
+@synthesize promotionId;
+@synthesize categoryTypeArray;
+@synthesize titleText;
+@synthesize titleLableText;
+@synthesize canJoin;
+@synthesize isJoinCash;
+@synthesize isLastLevel;
+@synthesize isFailSatisfyFullDiscount;
+@synthesize isCashPromotionList;
+@synthesize selectionArray = _selectionArray;
+@synthesize productsArray=_productsArray;
+@synthesize trackCategoryIdArray=_trackCategoryIdArray;
+@synthesize trackCategoryDic=_trackCategoryDic;
+@synthesize isDianzhongDian;
+@synthesize cartAnimation;
+@synthesize isCratAnimation;
+
+
+- (void)dealloc{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    OTS_SAFE_RELEASE(m_backToTop);
+    OTS_SAFE_RELEASE(promoteBar);
+    OTS_SAFE_RELEASE(titleText);
+    OTS_SAFE_RELEASE(titleLableText);
+    productsTable=nil;
+    OTS_SAFE_RELEASE(cateId);
+    OTS_SAFE_RELEASE(promotionId);
+    OTS_SAFE_RELEASE(_productsArray);
+    OTS_SAFE_RELEASE(buyQuantity);
+    selectionTable=nil;
+    OTS_SAFE_RELEASE(_selectionArray);
+    OTS_SAFE_RELEASE(_trackCategoryIdArray);
+    OTS_SAFE_RELEASE(_trackCategoryDic);
+    selectionBG=nil;
+    OTS_SAFE_RELEASE(m_BrandId);
+    OTS_SAFE_RELEASE(m_Attributes);
+    OTS_SAFE_RELEASE(m_PriceRange);
+    OTS_SAFE_RELEASE(m_PromotionType);
+    OTS_SAFE_RELEASE(m_SearchResultVO);
+    OTS_SAFE_RELEASE(m_OriginalSearchResultVO);
+    OTS_SAFE_RELEASE(m_FilterDictionary);
+    OTS_SAFE_RELEASE(cartAnimation);
+    m_FilterBtn=nil;
+    cateBtn=nil;
+    sortBtn=nil;
+    sortArrow=nil;
+    cateArrow=nil;
+    OTS_SAFE_RELEASE(categoryTypeArray);
+    OTS_SAFE_RELEASE(sortArray);
+    OTS_SAFE_RELEASE(canJoin);
+    OTS_SAFE_RELEASE(isJoinCash);
+    OTS_SAFE_RELEASE(needpayLabel);
+    OTS_SAFE_RELEASE(isDianzhongDian);
+    OTS_SAFE_RELEASE(sParam);
+    
+    [_currentCategory release];
+    [super dealloc];
+}
+- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
+{
+    self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
+    if (self) {
+        // Custom initialization
+        sortType=SORT_BY_DEFAULT;
+        m_CurrentPageIndex=1;
+        sortArray=[[NSMutableArray alloc] initWithObjects:@"默认排序",@"销量最高",@"价格最低",@"价格最高",@"最近发布", nil];
+        self.productsArray = [NSMutableArray array];
+        
+    }
+    return self;
+}
+
+#pragma mark --
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    
+    m_IsOriginal=YES;
+    self.selectionArray = [NSMutableArray array];
+    if (isCashPromotionList) {
+        self.trackCategoryIdArray = [NSMutableArray array];
+    }
+    else{
+        self.trackCategoryIdArray = [NSMutableArray arrayWithArray:[GlobalValue getGlobalValueInstance].cateLeveltrackArray];
+    }
+    
+    self.trackCategoryDic = [NSMutableDictionary dictionary];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dismissSelection) name:CATE_DISSMISS_SELECTION object:nil];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(filterConditionChanged:) name:@"CategoryFilterConditionChanged" object:nil];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refreshPromotionBar:) name:@"RefreshPromotionBar" object:nil];
+    
+    self.view.backgroundColor=[UIColor whiteColor];
+    m_DoTrackingFlag=1;
+    cartAnimation = [[CartAnimation alloc] init:self.view];
+    [cartAnimation setDelegate:self];
+    isCratAnimation = YES;
+    [self initFilter];
+    [self initTop];
+    [self inittable];
+    [self initPromoteBar];
+    [self setUniqueScrollToTopFor:productsTable];
+    [self sendRequset];
+}
+
+- (void)initPromoteBar
+{
+    if (isFailSatisfyFullDiscount) {
+        // 满减的推广条
+        promoteBar=[[UIImageView alloc] initWithFrame:CGRectMake(0, 83, 320, 28)];
+        promoteBar.userInteractionEnabled=YES;
+        promoteBar.image=[UIImage imageNamed:@"promotebar@2x.png"];
+        [self.view addSubview:promoteBar];
+        
+        CGRect productRc = productsTable.frame;
+        productRc.origin.y += promoteBar.frame.size.height;
+        productRc.size.height -= promoteBar.frame.size.height;
+        productsTable.frame = productRc;
+        
+        UILabel* titleLabel=[[UILabel alloc] initWithFrame:CGRectMake(10, 0, 200, 28)];
+        titleLabel.font=[UIFont systemFontOfSize:14.0];
+        titleLabel.textColor=[UIColor blackColor];
+        titleLabel.textAlignment=NSTextAlignmentLeft;
+        //    titleLabel.shadowColor=[UIColor darkGrayColor];
+        titleLabel.text=titleLableText;
+        //    titleLabel.shadowOffset=CGSizeMake(1, -1);
+        titleLabel.backgroundColor=[UIColor clearColor];
+        [promoteBar addSubview:titleLabel];
+        [titleLabel release];
+        
+        needpayLabel=[[UILabel alloc] initWithFrame:CGRectMake(250, 0, 200, 28)];
+        needpayLabel.font=[UIFont systemFontOfSize:14.0];
+        needpayLabel.textColor=[UIColor redColor];
+        needpayLabel.textAlignment=NSTextAlignmentLeft;
+        if (canJoin  == nil)
+        {
+            needpayLabel.text = @"";
+        }
+        else if ([canJoin intValue])
+        {
+            needpayLabel.text=@"可参加";
+        }
+        else if([isJoinCash intValue] == 1)
+        {
+            needpayLabel.text=@"已立减";
+        }
+        else
+        {
+            needpayLabel.text=@"未满足";
+        }
+
+        needpayLabel.backgroundColor=[UIColor clearColor];
+        [promoteBar addSubview:needpayLabel];
+    }
+}
+
+- (void)inittable{
+    productsTable=[[UITableView alloc] initWithFrame:CGRectMake(0, 84, 320, self.view.frame.size.height-84-49) style:UITableViewStylePlain];
+    productsTable.delegate=self;
+    productsTable.dataSource=self;
+    [self.view addSubview:productsTable];
+    [productsTable release];
+    productsTable.hidden=YES;
+    
+    selectionBG=[[UIView alloc] initWithFrame:CGRectMake(0, 84, 320, self.view.frame.size.height-84)];
+    [self.view addSubview:selectionBG];
+    [selectionBG release];
+    selectionBG.hidden=YES;
+    
+    selectionBTN=[[UIButton alloc] initWithFrame:CGRectMake(0, 200, 320, self.view.frame.size.height-84-200)];
+    selectionBTN.backgroundColor=[UIColor blackColor];
+    [selectionBTN addTarget:self action:@selector(dismissSelection) forControlEvents:UIControlEventTouchUpInside];
+    selectionBTN.alpha=0.6;
+    [selectionBG addSubview:selectionBTN];
+    [selectionBTN release];
+    
+    selectionTable=[[UITableView alloc] initWithFrame:CGRectMake(0, 0, 320, 200) style:UITableViewStylePlain];
+    selectionTable.backgroundColor=[UIColor whiteColor];
+    selectionTable.backgroundView.backgroundColor=[UIColor whiteColor];
+    selectionTable.dataSource=self;
+    selectionTable.delegate=self;
+    [selectionBG addSubview:selectionTable];
+    selectionTable.autoresizingMask=UIViewAutoresizingFlexibleWidth;
+    [selectionTable release];
+    
+    m_backToTop = [[BackToTopView alloc] init];
+	[self.view addSubview:m_backToTop];
+}
+
+- (void)initFilter{
+    m_BrandId=[[NSNumber alloc] initWithInt:0];
+    m_Attributes=[[NSString alloc] initWithString:@""];
+    m_PriceRange=[[NSString alloc] initWithString:@""];
+    m_PromotionType=[[NSString alloc] initWithString:@"0"];
+    self.isDianzhongDian = [NSNumber numberWithInt:0];
+    [m_FilterBtn setBackgroundImage:[UIImage imageNamed:@"title_cate_btn.png"] forState:UIControlStateNormal];
+    [m_FilterBtn setBackgroundImage:[UIImage imageNamed:@"title_cate_sel.png"] forState:UIControlStateHighlighted];
+}
+
+- (void)initTop{
+    UIImageView* topNav=[[UIImageView alloc] initWithFrame:CGRectMake(0, 0, 320, 44)];
+    topNav.userInteractionEnabled=YES;
+    topNav.image=[UIImage imageNamed:@"title_bg.png"];
+    [self.view addSubview:topNav];
+    [topNav release];
+    UILabel* titleLabel=[[UILabel alloc] initWithFrame:CGRectMake(60, 0, 200, 44)];
+    titleLabel.font=[UIFont boldSystemFontOfSize:20];
+    titleLabel.textColor=[UIColor whiteColor];
+    titleLabel.textAlignment=NSTextAlignmentCenter;
+    titleLabel.shadowColor=[UIColor darkGrayColor];
+    titleLabel.text = titleLableText==nil?@"商品列表":@"满减列表";;
+    titleLabel.shadowOffset=CGSizeMake(1, -1);
+    titleLabel.backgroundColor=[UIColor clearColor];
+    [topNav addSubview:titleLabel];
+    [titleLabel release];
+    UIButton* backBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    backBtn.frame=CGRectMake(0,0,61,44);
+    backBtn.titleLabel.font=[UIFont boldSystemFontOfSize:13];
+    [backBtn setBackgroundImage:[UIImage imageNamed:@"title_left_btn.png"] forState:UIControlStateNormal];
+    [backBtn setBackgroundImage:[UIImage imageNamed:@"title_left_btn_sel.png"] forState:UIControlStateHighlighted];
+    backBtn.titleEdgeInsets=UIEdgeInsetsMake(0, 4, 0, 0);
+    backBtn.titleLabel.shadowColor=[UIColor darkGrayColor];
+    backBtn.titleLabel.shadowOffset=CGSizeMake(1, -1);
+    
+    [backBtn addTarget:self action:@selector(backClick:) forControlEvents:UIControlEventTouchUpInside];
+    // [backBtn setTitle:@"返回" forState:UIControlStateNormal];
+    [topNav addSubview:backBtn];
+    
+    //各种属性，药网取消属性过滤
+//    m_FilterBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+//    [m_FilterBtn setBackgroundImage:[UIImage imageNamed:@"title_cate_btn.png"] forState:UIControlStateNormal];
+//    [m_FilterBtn setBackgroundImage:[UIImage imageNamed:@"title_cate_sel.png"] forState:UIControlStateHighlighted];
+//    // [m_FilterBtn setTitle:@"筛选" forState:UIControlStateNormal];
+//    m_FilterBtn.titleLabel.font=[UIFont boldSystemFontOfSize:13];
+//    m_FilterBtn.frame=CGRectMake(259, 0, 61, 44);
+//    m_FilterBtn.titleLabel.shadowOffset=CGSizeMake(1, -1);
+//    m_FilterBtn.titleLabel.shadowColor=[UIColor darkGrayColor];
+//    [topNav addSubview:m_FilterBtn];  
+    [m_FilterBtn addTarget:self action:@selector(filterBtnClicked:) forControlEvents:UIControlEventTouchUpInside];
+    //筛选条件的背景
+    UIImageView*cateBtnBG=[[UIImageView alloc] initWithFrame:CGRectMake(0, 44, 320, 40)];
+    cateBtnBG.image=[UIImage imageNamed:@"sort_unsel.png"];
+    [self.view addSubview:cateBtnBG];
+    cateBtnBG.userInteractionEnabled=YES;
+    [cateBtnBG release];
+    UIImageView* line=[[UIImageView alloc] initWithFrame:CGRectMake(160, 0, 1, 40)];
+    line.image=[UIImage imageNamed:@"cate_selection_line.png"];
+    [cateBtnBG addSubview:line];
+    [line release];
+    
+    //分类按钮
+    //    CategoryVO* vo=[categoryTypeArray objectAtIndex:0];
+    NSString* defaultCatetitle=titleText;
+    if ([defaultCatetitle hasPrefix:@"全部"]) {
+        defaultCatetitle=@"全部分类";
+    }else{
+        defaultCatetitle=titleText;
+    }
+    NSMutableString* cateTilte=[NSMutableString stringWithString:defaultCatetitle];
+    if (cateTilte.length>5) {
+        cateTilte=[NSMutableString stringWithFormat:@"%@... ",[cateTilte substringToIndex:5]];
+    }
+    
+    cateBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    //    cateBtn.showsTouchWhenHighlighted=YES;
+    cateBtn.titleLabel.font=[UIFont systemFontOfSize:16];
+    [cateBtn setBackgroundImage:[UIImage imageNamed:@"sort_unsel.png"] forState:UIControlStateNormal];
+    [cateBtn setBackgroundImage:[UIImage imageNamed:@"cate_sort_sel.png"] forState:UIControlStateHighlighted];
+    cateBtn.tag=0;
+    [cateBtn setTitle:cateTilte forState:UIControlStateNormal];
+    [cateBtn setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+    cateBtn.frame=CGRectMake(0, 0, 160, 40);
+    [cateBtn addTarget:self action:@selector(cateSelectClick:) forControlEvents:UIControlEventTouchUpInside];
+    [cateBtnBG addSubview:cateBtn];
+    
+    cateArrow=[[UIImageView alloc] initWithImage:[UIImage imageNamed:@"cate_arrow_down"]];
+    cateArrow.frame=CGRectMake(160-30, 15, 15, 15);
+    cateArrow.center=CGPointMake(160-30, 20);
+    [cateBtn addSubview:cateArrow];
+    [cateArrow release];
+    
+    
+    //排序按钮
+    sortBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    sortBtn.frame=CGRectMake(160, 0, 160, 40);
+    sortBtn.tag=0;
+    sortBtn.titleLabel.font=[UIFont systemFontOfSize:16];
+    
+    [sortBtn setBackgroundImage:[UIImage imageNamed:@"sort_unsel.png"] forState:UIControlStateNormal];
+    [sortBtn setBackgroundImage:[UIImage imageNamed:@"cate_sort_sel.png"] forState:UIControlStateHighlighted];
+    [sortBtn setTitle:[sortArray objectAtIndex:0] forState:UIControlStateNormal];
+    [sortBtn setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+
+    [sortBtn addTarget:self action:@selector(sortClick:) forControlEvents:UIControlEventTouchUpInside];
+    [cateBtnBG addSubview:sortBtn];
+    sortArrow=[[UIImageView alloc] initWithImage:[UIImage imageNamed:@"cate_arrow_down"]];
+    sortArrow.frame=CGRectMake(160-30, 15, 15, 15);
+    sortArrow.center=CGPointMake(160-30, 20);
+    
+    [sortBtn addSubview:sortArrow];
+    [sortArrow release];
+    
+    
+}
+#pragma mark data
+- (void)sendRequset{
+    if (isLoadingMore) {
+        //[self showLoading:NO];
+    }else {
+        [self showLoading:YES];
+    }
+    [self otsDetatchMemorySafeNewThreadSelector:@selector(requestData) toTarget:self withObject:nil];
+}
+
+/*
+-(void)requsetAttribute{
+    [self performInThreadBlock:^{
+        Trader *trader=[GlobalValue getGlobalValueInstance].trader;
+        NSNumber *mcsiteId=[NSNumber numberWithInt:1];
+        NSNumber *provinceId=[GlobalValue getGlobalValueInstance].provinceId;
+        NSString *keyword=@"";
+        NSNumber *categoryId=[NSNumber numberWithLong:[self.cateId longValue]];
+        NSNumber *brandId = m_BrandId;
+        NSString *attributes  = m_Attributes;
+        NSString *priceRange  = m_PriceRange;
+        NSString *filter  = m_PromotionType;
+        NSNumber *curSortType=[NSNumber numberWithInt:sortType];
+        NSString *token=[GlobalValue getGlobalValueInstance].token;
+        if (sParam!=nil) {
+            [sParam release];
+            sParam=nil;
+        }
+        sParam = [[SearchParameterVO alloc]init] ;
+        [sParam setKeyword:keyword];
+        [sParam setCategoryId:categoryId];
+        [sParam setBrandId:brandId];
+        [sParam setAttributes:attributes];
+        [sParam setPriceRange:priceRange];
+        [sParam setFilter:filter];
+        [sParam setSortType:curSortType];
+        [sParam setPromotionId:promotionId];
+
+        SearchService* sser=[[SearchService alloc] init];
+        if (token != nil && [token isKindOfClass:[NSString class]]) {
+            token=@"";
+        }
+        if (m_OriginalSearchResultVO!=nil) {
+            [m_OriginalSearchResultVO release];
+            m_OriginalSearchResultVO=nil;
+        }
+        m_OriginalSearchResultVO = [[sser searchAttributesOnly:trader provinceId:provinceId mcsiteid:mcsiteId isDianzhongdian:isDianzhongDian searchParameterVO:sParam token:token] retain];
+
+    } completionInMainBlock:^{
+        if (m_OriginalSearchResultVO==nil) {
+        }else{
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"SearchAttributeOK" object:m_OriginalSearchResultVO];
+        }
+    }];
+}*/
+
+- (void)requestData
+{
+    NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
+    
+    YWSearchService *searchSer = [[YWSearchService alloc] init];
+    
+    NSDictionary *paramDic = @{@"province":@"1",
+                               @"pageSize":@"10",
+                              @"pageIndex":@"1",
+                              @"catalogId":@"1905",
+                                 @"status":@"0",
+                                   @"sort":[NSString stringWithFormat:@"%d",sortType]};
+    
+    SearchResultInfo *searchResult = [searchSer getSearchProductListWithParam:paramDic];
+    if (searchResult.bRequestStatus)
+    {
+        if (searchResult.productList.count > 0)
+        {
+            if (isLoadingMore)
+            {
+                [self.productsArray addObjectsFromArray:searchResult.productList];
+            }
+            else
+            {
+                self.productsArray = searchResult.productList;
+            }
+            m_ProductTotalCount = searchResult.totalCount;
+            [self performSelectorOnMainThread:@selector(updateProductsTable) withObject:nil waitUntilDone:[NSThread isMainThread]];
+        }
+        else
+        {
+            [self performSelectorOnMainThread:@selector(categoryProductIsNull) withObject:nil waitUntilDone:NO];
+        }
+    }
+    else
+    {
+        [self performSelectorOnMainThread:@selector(showNetErrer) withObject:nil waitUntilDone:NO];
+    }
+    [self performSelectorOnMainThread:@selector(hideLoadingMore) withObject:nil waitUntilDone:NO];
+
+    [searchSer release];
+    
+    
+  /*
+    SearchResultVO *tempSearchResultVO;
+    Trader *trader=[GlobalValue getGlobalValueInstance].trader;
+    NSNumber *mcsiteId=[NSNumber numberWithInt:1];
+    NSNumber *provinceId=[GlobalValue getGlobalValueInstance].provinceId;
+    NSString *keyword=@"";
+    NSNumber *categoryId=[NSNumber numberWithLong:[self.cateId longValue]];
+    NSNumber *brandId = m_BrandId;
+    NSString *attributes  = m_Attributes;
+    NSString *priceRange  = m_PriceRange;
+    NSString *filter  = m_PromotionType;
+    NSNumber *curSortType=[NSNumber numberWithInt:sortType];
+    NSNumber *curPage=[NSNumber numberWithInt:m_CurrentPageIndex];
+    NSNumber *pageSize=[NSNumber numberWithInt:10];
+    NSString *token=[GlobalValue getGlobalValueInstance].token;
+    //NSString *token=[GlobalValue getGlobalValueInstance].token;
+    
+    SearchService*sServ=[[SearchService alloc] init];
+    //搜索参数
+    SearchParameterVO * serParam = [[[SearchParameterVO alloc]init] autorelease];
+    [serParam setKeyword:keyword];
+    [serParam setCategoryId:categoryId];
+    [serParam setBrandId:brandId];
+    [serParam setAttributes:attributes];
+    [serParam setPriceRange:priceRange];
+    [serParam setFilter:filter];
+    [serParam setSortType:curSortType];
+    [serParam setPromotionId:promotionId];
+    if (token != nil && [token isKindOfClass:[NSString class]]) {
+        tempSearchResultVO = [sServ searchProductsOnly:trader provinceId:provinceId mcsiteid:mcsiteId isDianzhongdian:isDianzhongDian searchParameterVO:serParam currentPage:curPage pageSize:pageSize token:token];
+    }else{
+        tempSearchResultVO = [sServ searchProductsOnly:trader provinceId:provinceId mcsiteid:mcsiteId isDianzhongdian:isDianzhongDian searchParameterVO:serParam currentPage:curPage pageSize:pageSize token:@""];
+    }
+    
+    
+    if (tempSearchResultVO!=nil && ![tempSearchResultVO isKindOfClass:[NSNull class]]) {
+        if ([[tempSearchResultVO page] objList]!=nil && [[[tempSearchResultVO page] objList] count]!=0) {
+            if (m_SearchResultVO!=nil) {
+                [m_SearchResultVO release];
+            }
+            if (isCashPromotionList) {
+                // *** 初始化 满减分类
+                m_SearchResultVO=[tempSearchResultVO retain];
+                [self.trackCategoryIdArray removeAllObjects];
+                CategoryVO*allVO=[[CategoryVO alloc] init];
+                allVO.categoryName=[NSString stringWithFormat:@"全部分类"];
+                allVO.nid=[NSNumber numberWithInt:0];
+                NSMutableArray* tempArray=[NSMutableArray array];
+                [tempArray addObjectsFromArray:[self searchCategoryToCategory:m_SearchResultVO.searchCategorys]];
+                [tempArray insertObject:allVO atIndex:0];
+                [allVO release];
+                self.categoryTypeArray =tempArray;
+            }
+
+            if (isLoadingMore) {
+                [self.productsArray addObjectsFromArray:[[tempSearchResultVO page] objList]];
+            }else {
+                [self.productsArray removeAllObjects];
+                [self.productsArray addObjectsFromArray:[[tempSearchResultVO page] objList]];
+                
+            }
+            m_ProductTotalCount=[[[tempSearchResultVO page] totalSize] intValue];
+            [self performSelectorOnMainThread:@selector(updateProductsTable) withObject:nil waitUntilDone:[NSThread isMainThread]];
+        } else {
+            [self performSelectorOnMainThread:@selector(categoryProductIsNull) withObject:nil waitUntilDone:NO];
+        }
+        if (m_DoTrackingFlag!=0)
+        {
+            JSTrackingPrama* prama = [[[JSTrackingPrama alloc]initWithJSType:EJStracking_CategoryProductList extraPrama:self.cateId, [NSString stringWithFormat:@"%d",m_CurrentPageIndex], nil]autorelease];
+            [prama setResultSum:[NSNumber numberWithInt:m_ProductTotalCount]];
+            [DoTracking doJsTrackingWithParma:prama];
+        }
+    }
+    else
+    {
+        [self performSelectorOnMainThread:@selector(showNetErrer) withObject:nil waitUntilDone:NO];
+    }
+    [self performSelectorOnMainThread:@selector(hideLoadingMore) withObject:nil waitUntilDone:NO];
+    [sServ release];
+   
+   */
+    [pool drain];
+}
+
+-(NSMutableArray*)searchCategoryToCategory:(NSArray*) searchCategorVo
+{
+    NSMutableArray * temp = [[NSMutableArray alloc]init];
+    for (int i = 0; i< [searchCategorVo count]; i++) {
+        CategoryVO *_cate = [[CategoryVO alloc]init];
+        SearchCategoryVO* SCV = [searchCategorVo objectAtIndex:i];
+        [_cate setCategoryName:SCV.categoryName];
+        [_cate setNid:SCV.categoryId];
+        [temp addObject:_cate];
+        [_cate release];
+    }
+    return [temp autorelease];
+}
+
+-(void)updateProductsTable{
+    [self hideLoading];
+    productsTable.hidden=NO;
+    nullImg.hidden=YES;
+    [productsTable reloadData];
+    if (m_CurrentPageIndex==1) {
+        [productsTable scrollRectToVisible:CGRectMake(0, 0, 320, 200) animated:NO];
+    }
+//    [self requsetAttribute];
+}
+
+-(void)hideLoadingMore
+{
+    [productsTable setTableFooterView:nil];
+    isLoadingMore=NO;
+}
+
+- (void)categoryProductIsNull{
+    [self hideLoading];
+    if (nullImg==nil) {
+        nullImg=[[UIImageView alloc] initWithFrame:CGRectMake(0, 84, 320, 329)];
+        nullImg.image=[UIImage imageNamed:@"cate_product_null"];
+        [self.view addSubview:nullImg];
+        [self.view insertSubview:nullImg belowSubview:selectionBG];
+        [nullImg release];
+    }
+    nullImg.hidden=NO;
+    //    m_FilterBtn.enabled=NO;
+    //    sortBtn.enabled=NO;
+    //    [sortBtn setTitleColor:[UIColor lightGrayColor] forState:UIControlStateNormal];
+    //    cateBtn.enabled=NO;
+    //    [cateBtn setTitleColor:[UIColor lightGrayColor] forState:UIControlStateNormal];
+}
+- (void)addToCartRequest:(int)currentRow{
+    NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
+    ProductVO * productVO = [self.productsArray objectAtIndex:currentRow];
+    // 设置购买数量
+    if (buyQuantity!=nil) {
+        [buyQuantity release];
+    }
+    if (productVO.shoppingCount != nil && [productVO.shoppingCount intValue] > 1) {	// 有N件起购限制
+        buyQuantity = [[NSNumber alloc] initWithInt:[productVO.shoppingCount intValue]];
+    } else {	// 无N件起购限制
+        buyQuantity = [[NSNumber alloc] initWithInt:1];
+    }
+    // 购物操作流程
+    if ([GlobalValue getGlobalValueInstance].token != nil) {	// 购物调用addProduct接口
+        int proId = [productVO.productId intValue];				// 获得商品号
+        int merchanId = [productVO.merchantId intValue];		//获得商户号
+        CartService * cSer = [[[CartService alloc] init] autorelease];
+        
+        //满减活动  情况下带上满减活动id
+        //        NSString * CashPromotionId = @"";
+        //        if (promotionId) {
+        //            CashPromotionId = [promotionId stringValue];
+        //        }
+        //
+        AddProductResult *result=[cSer addSingleProduct:[GlobalValue getGlobalValueInstance].token productId:[NSNumber numberWithInt:proId] merchantId:[NSNumber numberWithInt:merchanId] quantity:buyQuantity promotionid:@""];
+        
+        if (result!=nil && ![result isKindOfClass:[NSNull class]]) {
+            if ([[result resultCode] intValue]==1) {//成功
+//                [[NSNotificationCenter defaultCenter] postNotificationName:@"promotioncartload" object:nil];
+                [[NSNotificationCenter defaultCenter] postNotificationName:@"CartChanged" object:nil];
+                [self performSelectorOnMainThread:@selector(showBuyProductAnimationWithSelectedIndex:) withObject:[NSNumber numberWithInt:currentRow] waitUntilDone:NO];
+            } else {
+                [self performSelectorOnMainThread:@selector(showError:) withObject:[result errorInfo] waitUntilDone:NO];
+            }
+        } else {
+            [self performSelectorOnMainThread:@selector(showError:) withObject:@"网络异常，请检查网络配置..." waitUntilDone:NO];
+        }
+    } else {	// 购物添加到本地
+        
+        //添加前，查一下商品详情，换购字段在搜索接口没返回
+        ProductService* helper= [[ProductService alloc] init];
+        ProductVO*product =[helper getProductDetail:[GlobalValue getGlobalValueInstance].trader productId:productVO.productId provinceId:[GlobalValue getGlobalValueInstance].provinceId promotionid:productVO.promotionId];
+
+        LocalCartItemVO * localProductVO = [[LocalCartItemVO alloc] initWithProductVO:product quantity:[NSString stringWithFormat:@"%@", buyQuantity]];
+        [SharedDelegate addProductToLocal:localProductVO];
+        [self performSelectorOnMainThread:@selector(showBuyProductAnimationWithSelectedIndex:) withObject:[NSNumber numberWithInt:currentRow] waitUntilDone:YES];
+        [localProductVO release];
+        [helper release];
+    }
+//    [NSThread sleepForTimeInterval:1.5];
+    [pool drain];
+}
+
+#pragma mark - 刷新推广条
+-(void)refreshPromotionBar:(NSNotification *) notification
+{
+    NSArray *cashTempAr = (NSArray *) [notification object];
+    for (int i = 0; i < [cashTempAr count]; i++) {
+        MobilePromotionVO *mpvo=(MobilePromotionVO *)[cashTempAr objectAtIndex:i];
+        if (promotionId && [mpvo.promotionId isEqualToNumber:promotionId]) {
+            if (canJoin!=nil) {
+                if ([mpvo.canJoin intValue])
+                {
+                    needpayLabel.text=@"可参加";
+                }
+                else if([isJoinCash intValue] == 1)
+                {
+                    needpayLabel.text=@"已立减";
+                }
+                else
+                {
+                    needpayLabel.text=@"未满足";
+                }
+            }
+        }
+    }
+}
+
+-(void)updateSelectionTable
+{
+    [self.selectionArray removeAllObjects];
+    if (cateBtn.tag==0&&sortBtn.tag==1)
+    {
+        sortArrow.image=[UIImage imageNamed:@"cate_arrow_up"];
+        cateArrow.image=[UIImage imageNamed:@"cate_arrow_down"];
+        [self.selectionArray addObjectsFromArray: sortArray];
+        selectionBG.hidden=NO;
+        promoteBar.hidden = YES;
+    }
+    else if (cateBtn.tag==1&&sortBtn.tag==0)
+    {
+
+        NSMutableArray * categoryList = [self getCateFromLocalByRootId:self.currentCategory.cid];
+        NSMutableArray *tempCateArr = [[NSMutableArray alloc] init];
+        if ([_currentCategory.cid intValue] != -1)
+        {
+            //不是第一级
+            CategoryInfo *category = [[CategoryInfo alloc] init];
+            category.name = BACKUPLEVEL;
+            [tempCateArr addObject:category];
+            [category release];
+        }
+        
+        CategoryInfo *category = [[CategoryInfo alloc] init];
+        category.name = @"全部";
+        [tempCateArr addObject:category];
+        [category release];
+        
+        [tempCateArr addObjectsFromArray:categoryList];
+        self.categoryTypeArray = tempCateArr;
+        [tempCateArr release];
+
+        
+        
+        [self.selectionArray addObjectsFromArray: self.categoryTypeArray];
+        selectionBG.hidden=NO;
+        promoteBar.hidden = YES;
+        selectionType=0;
+        
+        cateArrow.image=[UIImage imageNamed:@"cate_arrow_up"];
+        sortArrow.image=[UIImage imageNamed:@"cate_arrow_down"];
+    }
+    else
+    {
+        cateArrow.image=[UIImage imageNamed:@"cate_arrow_down"];
+        sortArrow.image=[UIImage imageNamed:@"cate_arrow_down"];
+        selectionBG.hidden=YES;
+        promoteBar.hidden = NO;
+    }
+    [selectionTable reloadData];
+}
+#pragma mark error
+// 网络异常提示
+-(void)showNetAlert:(NSInteger)theTag {
+    [[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+	UIAlertView * alertView = [[OTSAlertView alloc] initWithTitle:nil message:@"网络异常,请检查网络配置..." delegate:self cancelButtonTitle:@"确认" otherButtonTitles:nil];
+	alertView.tag = theTag;
+	[alertView show];
+	[alertView release];
+	alertView = nil;
+}
+
+-(void)showNetErrer
+{
+    [self hideLoading];
+    [self showNetAlert:ALERTVIEW_TAG_NET_EXCEPTION];
+}
+
+- (void)alertView:(UIAlertView *)alertView didDismissWithButtonIndex:(NSInteger)buttonIndex{
+    if (alertView.tag==0) {
+        return;
+    }
+    CategoryViewController* cateVC= (CategoryViewController*)[ SharedDelegate.tabBarController.viewControllers objectAtIndex:1];
+    [cateVC enterTopCategory:YES];
+}
+-(void)showError:(NSString *)error
+{
+    [AlertView showAlertView:nil alertMsg:error buttonTitles:nil alertTag:ALERTVIEW_TAG_COMMON];
+}
+#pragma mark action
+- (void)backClick:(id)sender{
+    NSMutableArray * cateLeveltrackArray = [GlobalValue getGlobalValueInstance].cateLeveltrackArray;
+    [cateLeveltrackArray pop];
+    
+    //[[NSNotificationCenter defaultCenter] postNotificationName:@"cartload" object:nil];
+    
+    [self popSelfAnimated:YES];
+}
+
+- (void)dismissSelection{
+    sortBtn.tag=0;
+    cateBtn.tag=0;
+    [cateBtn setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+    [sortBtn setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+    sortArrow.image=[UIImage imageNamed:@"cate_arrow_down"];
+    cateArrow.image=[UIImage imageNamed:@"cate_arrow_down"];
+    selectionBG.hidden=YES;
+    
+}
+-(void)touchdownBtn:(UIButton*)btn{
+    if (btn==cateBtn) {
+        [cateBtn setBackgroundImage:[UIImage imageNamed:@"cate_sort_sel.png"] forState:UIControlStateNormal];
+    }else{
+        [sortBtn setBackgroundImage:[UIImage imageNamed:@"cate_sort_sel.png"] forState:UIControlStateNormal];
+    }
+}
+-(void)touchCancelBtn:(UIButton*)btn{
+    if (btn==cateBtn) {
+        [cateBtn setBackgroundImage:[UIImage imageNamed:@""] forState:UIControlStateNormal];
+    }else{
+        [sortBtn setBackgroundImage:[UIImage imageNamed:@""] forState:UIControlStateNormal];
+    }
+}
+- (void)cateSelectClick:(UIButton*)sender{
+    [self popupSelectionTable];
+}
+
+//点击分类按钮
+-(void)popupSelectionTable
+{
+    if (cateBtn.tag)
+    {
+        cateBtn.tag=0;
+        [cateBtn setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+    }
+    else
+    {
+        cateBtn.tag=1;
+        if (sortBtn.tag==1)
+        {
+            sortBtn.tag=0;
+            [sortBtn setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+        }
+        [cateBtn setTitleColor:RED_TEXT_COLOR forState:UIControlStateNormal];
+        
+        
+        //分类列表出来前就确定 currentCategory
+        if (!_bSelectAllCategory && [_currentCategory.parentId intValue] != -2)
+        {
+            self.currentCategory = [self getCategoryByCid:_currentCategory.parentId];
+        }
+        
+    }
+    selectionBTN.frame=CGRectMake(0, 280, 320, self.view.frame.size.height-84-280);
+    selectionTable.frame=CGRectMake(0, 0, 320, self.view.frame.size.height-84-SharedDelegate.tabBarController.tabBar.frame.size.height);
+    m_DoTrackingFlag=1;
+    [self initFilter];
+    [self updateSelectionTable];
+}
+
+-(void)sortClick:(UIButton*)sender
+{
+    if (sortBtn.tag)
+    {
+        sortBtn.tag=0;
+        [sortBtn setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+    }
+    else
+    {
+        sortBtn.tag=1;
+        if (cateBtn.tag==1)
+        {
+            cateBtn.tag=0;
+            [cateBtn setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+        }
+        
+        [sortBtn setTitleColor:RED_TEXT_COLOR forState:UIControlStateNormal];
+    }
+    selectionBTN.frame=CGRectMake(0, 200, 320, self.view.frame.size.height-84-200);
+    selectionTable.frame=CGRectMake(0, 0, 320, self.view.frame.size.height-84-SharedDelegate.tabBarController.tabBar.frame.size.height);
+    switch (sortType)
+    {
+        case SORT_BY_DEFAULT:
+            selectionType=0;
+            break;
+        case SORT_BY_SALE:
+            selectionType=1;
+            break;
+        case SORT_BY_PRICE_ASC:
+            selectionType=2;
+            break;
+        case SORT_BY_PRICE_DESC:
+            selectionType=3;
+            break;
+        case SORT_BY_TIME:
+            selectionType=4;
+            break;
+        default:
+            break;
+    }
+    m_DoTrackingFlag=0;
+    [self updateSelectionTable];
+}
+
+-(void)filterBtnClicked:(id)sender
+{
+    sortBtn.tag=0;
+    cateBtn.tag=0;
+    [sortBtn setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+    [cateBtn setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+    [self updateSelectionTable];
+    [SharedDelegate enterFilterWithSearchResultVO:m_OriginalSearchResultVO condition:m_FilterDictionary fromTag:FROM_CATEGORY];
+    if (m_OriginalSearchResultVO==nil) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"SearchAttributeOK" object:sParam];
+    }
+
+    //[DoTracking doTracking:@"searchFilter"];//点筛选按钮统计
+    // tracking 统计
+    JSTrackingPrama* prama = [[[JSTrackingPrama alloc]initWithJSType:EJStracking_Filiter extraPramaDic:nil]autorelease];
+    [DoTracking doJsTrackingWithParma:prama];
+}
+
+-(void)filterConditionChanged:(NSNotification *)notification
+{
+    BOOL hasFilter=NO;//是否有筛选条件
+    NSMutableDictionary *dictionary=[notification object];
+    NSNumber* tempBrandId=[dictionary objectForKey:@"brandId"];
+    NSString* tempAttr=[dictionary objectForKey:@"attributes"];
+    NSString* tempPromotionType=[dictionary objectForKey:@"promotionType"];
+    NSString*  tempPriceRange=[dictionary objectForKey:@"priceRange"];
+    //NSString* tempBusinessType=[dictionary objectForKey:@"businessType"];
+    
+    if ( ([tempBrandId intValue]!=[m_BrandId intValue])||
+        (tempAttr && ![tempAttr isEqualToString:m_Attributes])||
+        (tempPromotionType && ![tempPromotionType isEqualToString: m_PromotionType ])||
+        (tempPriceRange && ![tempPriceRange isEqualToString:m_PriceRange]))
+    {
+        hasFilter=YES;
+    }else{
+        hasFilter=NO;
+    }
+    
+    if (m_FilterDictionary!=nil) {
+        [m_FilterDictionary release];
+    }
+    m_FilterDictionary=[dictionary retain];
+    NSNumber *brandId=[dictionary objectForKey:@"brandId"];
+    if (m_BrandId!=nil) {
+        [m_BrandId release];
+    }
+    if (brandId==nil) {
+        m_BrandId=[[NSNumber alloc] initWithInt:0];
+    } else {
+        m_BrandId=[brandId retain];
+    }
+    
+    NSString *attributes=[dictionary objectForKey:@"attributes"];
+    if (m_Attributes!=nil) {
+        [m_Attributes release];
+    }
+    if (attributes==nil) {
+        m_Attributes=[[NSString alloc] initWithString:@""];
+    } else {
+        m_Attributes=[attributes retain];
+    }
+    
+    NSString *priceRange=[dictionary objectForKey:@"priceRange"];
+    if (m_PriceRange!=nil) {
+        [m_PriceRange release];
+    }
+    if (priceRange==nil) {
+        m_PriceRange=[[NSString alloc] initWithString:@""];
+    } else {
+        m_PriceRange=[priceRange retain];
+    }
+    
+    NSString *promotionType=[dictionary objectForKey:@"promotionType"];
+    if (m_PromotionType!=nil) {
+        [m_PromotionType release];
+    }
+    if (promotionType==nil) {
+        m_PromotionType=[[NSString alloc] initWithString:@"0"];
+    } else {
+        m_PromotionType=[promotionType retain];
+    }
+    self.isDianzhongDian = [dictionary objectForKey:@"merchantType"];
+    if (isDianzhongDian && isDianzhongDian.intValue != 0) {
+        hasFilter = YES;
+    }else{
+        self.isDianzhongDian = [NSNumber numberWithInt:0];
+    }
+    
+    DebugLog(@"%@   %@   %@    %@",m_BrandId,m_Attributes,m_PriceRange,m_PromotionType);
+    
+    if ([m_BrandId intValue]==0&&[m_Attributes isEqualToString:@""]&&[m_PriceRange isEqualToString:@""]&&[m_PromotionType intValue]==0) {
+        [m_FilterBtn setBackgroundImage:[UIImage imageNamed:@"title_cate_btn.png"] forState:UIControlStateNormal];
+    }else{
+        [m_FilterBtn setBackgroundImage:[UIImage imageNamed:@"title_cate_sel.png"] forState:UIControlStateNormal];
+    }
+    if (hasFilter) {
+        m_CurrentPageIndex=1;
+        m_DoTrackingFlag=0;
+        [self.productsArray removeAllObjects];
+        productsTable.hidden=YES;
+        [productsTable reloadData];
+        [self sendRequset];
+    }
+}
+
+-(void)accessoryButtonTap:(UIControl *)button withEvent:(UIEvent *)event{
+	NSIndexPath *indexPath=[productsTable indexPathForRowAtPoint:[[[event touchesForView:button] anyObject] locationInView:productsTable]];//获得NSIndexPath
+	if (indexPath==nil) {
+		return;
+	}else {
+		int currentRow=[indexPath row];//获得选择的第几行
+		ProductVO * productVO = [self.productsArray objectAtIndex:currentRow];
+		if ([productVO.canBuy isEqualToString:@"true"]) {
+            [self addToCartRequest:currentRow];
+		} else {
+			[[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+			UIAlertView * alert = [[OTSAlertView alloc] initWithTitle:nil message:@"很抱歉,该商品已经卖光啦!你可以收藏商品,下次购买" delegate:self cancelButtonTitle:@"确认" otherButtonTitles:nil];
+			alert.tag = 0;
+			[alert show];
+			[alert release];
+			alert = nil;
+		}
+        //[DoTracking doTracking:[NSString stringWithFormat:@"cartAdd_%@_%@",[GlobalValue getGlobalValueInstance].provinceId,[productVO productId]]];//加入购物车数据统计
+        // tracking 统计
+        JSTrackingPrama* prama = [[[JSTrackingPrama alloc]initWithJSType:EJStracking_addCart_inCategory extraPramaDic:nil]autorelease];
+        [prama setProductId:productVO.productId];
+        [prama setMerchant_id:[NSString stringWithFormat:@"%@",productVO.merchantId]];
+        [DoTracking doJsTrackingWithParma:prama];
+	}
+}
+-(void)getMoreProduct
+{
+    m_CurrentPageIndex++;
+    isLoadingMore=YES;
+    [self sendRequset];
+    m_DoTrackingFlag = 1;
+}
+// creat by yj
+-(void)cateTableAnimation:(NSInteger)type
+{
+    if (type)
+    {
+        [selectionTable.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:nil];
+    }else{
+        [selectionTable.layer addAnimation:[OTSNaviAnimation animationPushFromLeft] forKey:nil];
+    }
+
+}
+#pragma mark scroll
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView
+{
+	m_backToTop.scrollScreenHeight = 367;
+	[m_backToTop scrollViewDidScroll:scrollView];
+}
+
+- (void)scrollViewDidEndDecelerating:(UIScrollView *)theScrollView{
+	[m_backToTop scrollViewDidEndDecelerating:theScrollView];
+}
+- (void)scrollViewDidEndDragging:(UIScrollView *)theScrollView willDecelerate:(BOOL)decelerate{
+	[m_backToTop scrollViewDidEndDragging:theScrollView willDecelerate:decelerate];
+    
+}
+- (BOOL)scrollViewShouldScrollToTop:(UIScrollView *)scrollView{
+	[m_backToTop scrollViewShouldScrollToTop:scrollView];
+	return YES;
+}
+#pragma mark table
+-(UITableViewCell*)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
+    
+    if (tableView == productsTable)
+    {
+        static NSString*identify=@"cateProductCell";
+        CategoryProductCell*cell=(CategoryProductCell*)[tableView dequeueReusableCellWithIdentifier:identify];
+        
+        if (cell==nil)
+        {
+            cell=[[[CategoryProductCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:identify] autorelease];
+        }
+        
+        ProductInfo *productVO = (ProductInfo *)[self.productsArray objectAtIndex:indexPath.row];
+        
+        // 商品名称
+//        if (productVO.isYihaodian && productVO.isYihaodian.intValue == 0) {
+//            cell.productNameLbl.text = [NSString stringWithFormat:@"    %@",productVO.name];
+//            [cell.the1MallLogo setHidden:NO];
+//        }else{
+            cell.productNameLbl.text = productVO.name;
+            [cell.the1MallLogo setHidden:YES];
+//        }
+        
+        // 市场价格
+        // cell.marketPriceLbl.text = [NSString stringWithFormat:@"￥%.2f", [productVO.maketPrice floatValue]];
+        
+        // 商品价格
+        cell.priceLbl.text = [NSString stringWithFormat:@"￥%.2f", [productVO.price floatValue]];
+        
+        // 促销信息
+//        if (!isCashPromotionList) {
+//            cell.hasCashLbl.text = productVO.hasCash;
+//        }
+        
+        // 商品库存
+//        NSString * canBuyStr;
+//        if ([productVO.canBuy isEqualToString:@"true"]) {
+//            canBuyStr = @"有货";
+//        } else {
+//            canBuyStr = @"已售完";
+//        }
+        
+//        if (productVO.experienceCount!=nil) {
+//            [cell.shoppingCountLbl setText:[NSString stringWithFormat:@"(%@)",productVO.experienceCount]];
+//        } else {
+//            [cell.shoppingCountLbl setText:@"(0)"];
+//        }
+        
+          //黄色星星
+//        for (NSUInteger i = 0; i < 5; i++)
+//        {
+//            UIImageView *subView = (UIImageView *)[cell.contentView viewWithTag:1000+i];
+//            if (i<[[productVO score] intValue]) {
+//                subView.image = [UIImage imageNamed:@"pentagon_Yellow.png"];
+//            }
+//        }
+         // 操作按钮
+//        cell.canBuyLbl.text = canBuyStr;
+        
+        if ([productVO.prescription intValue] == 14 || productVO.prescription.intValue == 16)
+        {
+            //如果是处方药
+            [cell.operateBtn setFrame:CGRectMake(280, 38, 23, 19)];
+            [cell.operateBtn setImage:[UIImage imageNamed:@"1mall_eye.png"] forState:0];
+            [cell.operateBtn removeTarget:self action:NULL forControlEvents:UIControlEventTouchUpInside];
+            [cell.operateBtn setUserInteractionEnabled:NO];
+        }
+        else
+        {
+            [cell.operateBtn setUserInteractionEnabled:YES];
+            [cell.operateBtn addTarget:self action:@selector(accessoryButtonTap:withEvent:) forControlEvents:UIControlEventTouchUpInside];
+            cell.operateBtn.frame=CGRectMake(270, 8, 50, 85);
+            if (/*[productVO.canBuy isEqualToString:@"true"]*/ [productVO.status intValue] == 8)
+            {
+                [cell.operateBtn setImage:[UIImage imageNamed:@"product_cart.png"] forState:0];
+            }
+            else
+            {
+                [cell.operateBtn setImage:[UIImage imageNamed:@"product_cart_ni.png"] forState:0];
+            }
+        }
+    
+        
+//        // 有赠品
+//        if ([[productVO hasGift] intValue]==1) {
+//            [cell.giftLogo setHidden:NO];
+//        } else {
+            [cell.giftLogo setHidden:YES];
+//        }
+
+        cell.imageView.image=[UIImage imageNamed:@"img_default.png"];
+//        [cell downloadImage:productVO.miniDefaultProductUrl];
+        [cell downloadImage:productVO.productImageUrl];
+        return cell;
+    }
+    else
+    {
+        //顶部分类和排序table
+        static NSString*identify=@"selectionCell";
+        CategorySelectionCell*cell=(CategorySelectionCell*)[tableView dequeueReusableCellWithIdentifier:identify];
+        if (cell==nil)
+        {
+            cell=[[[CategorySelectionCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:identify] autorelease];
+        }
+        
+        if (cateBtn.tag)
+        {
+            CategoryInfo *cateVo=(CategoryInfo *)[self.selectionArray objectAtIndex:indexPath.row];
+
+            cell.cateNameLab.text = [NSString stringWithFormat:@"%@",cateVo.name];
+            
+            CGSize titleSize = [cell.cateNameLab.text sizeWithFont:[UIFont fontWithName:@"Helvetica-Bold" size:14] constrainedToSize:CGSizeMake(MAXFLOAT, 0)];
+            [cell.cateproduct setFrame:CGRectMake(40+titleSize.width, 0, 100, 40)];
+            cell.cateproduct.text = @"";
+            
+            if ([self.trackCategoryIdArray count] < 3)
+            {
+                [cell setShowNextCate:YES];
+            }
+            else
+            {
+                [cell setShowNextCate:NO];
+            }
+            
+            if ([cateVo.name isEqualToString:BACKUPLEVEL]) {
+                [cell setShowUpBack:YES];
+                [cell setShowNextCate:NO];
+                [cell setShowCatePro:NO];
+            }
+            else if([cateVo.name hasPrefix:@"全部"]){
+                [cell setShowUpBack:NO];
+                [cell setShowNextCate:NO];
+                [cell setShowCatePro:NO];
+            }
+            else
+            {
+                [cell setShowUpBack:NO];
+                //[cell setShowNextCate:YES];
+            }
+        }
+        else
+        {
+            NSString* string=[self.selectionArray objectAtIndex:indexPath.row];
+            cell.cateNameLab.text=string;
+            [cell setShowUpBack:NO];
+            [cell setShowNextCate:NO];
+            [cell setShowCatePro:NO];
+        }
+        
+        //显示选中箭头
+        if (indexPath.row==selectionType)
+        {
+            [cell setShowArrow:YES];
+        }else
+        {
+            [cell setShowArrow:NO];
+        }
+        
+        //满减列表 不显示下级箭头
+        if (isCashPromotionList) {
+            [cell setShowNextCate:NO];
+        }
+        
+        return cell;
+    }
+}
+-(NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section{
+    if (tableView==productsTable) {
+        return self.productsArray.count;
+    } else {
+        return self.selectionArray.count;
+    }
+}
+-(CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
+    if (tableView==productsTable) {
+        return TABLEVIEW_NODECATEGOTY_CELL_HEIGHT;
+    } else {
+        return 45;
+    }
+}
+-(void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath{
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    
+    if (tableView==productsTable)
+    {
+        if (indexPath.row==self.productsArray.count)
+        {
+            return;
+        }
+        ProductInfo *productVO = [self.productsArray objectAtIndex:indexPath.row];
+        
+//        if (productVO.isYihaodian && productVO.isYihaodian.intValue == 0)
+//        {
+//            //更新最近浏览信息
+//            [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadAddBrowse:) toTarget:self withObject:productVO];
+//            // 1MALL的商品
+//            DebugLog(@"enter 1mall!!!!");
+//            NSString *urlStr;
+//            NSString* landingPageId;
+//            if (productVO.promotionId)
+//            {
+//                landingPageId = productVO.promotionId;
+//            }
+//            else
+//            {
+//                landingPageId = @"";
+//            }
+//            if ([GlobalValue getGlobalValueInstance].token == nil)
+//            {
+//                urlStr = [URL_BASE_MALL_NO_ONE stringByAppendingFormat:@"%@/%@/%@?osType=30",productVO.productId,[GlobalValue getGlobalValueInstance].provinceId,landingPageId];
+//            }
+//            else
+//            {
+//                // 对 token 进行base64加密
+//                NSData *b64Data = [GTMBase64 encodeData:[[GlobalValue getGlobalValueInstance].token dataUsingEncoding:NSUTF8StringEncoding]];
+//                NSString* b64Str = [[[NSString alloc] initWithData:b64Data encoding:NSUTF8StringEncoding] autorelease];
+//                
+//                urlStr = [URL_BASE_MALL_NO_ONE stringByAppendingFormat:@"%@/%@/%@?token=%@&osType=30",productVO.productId,[GlobalValue getGlobalValueInstance].provinceId,landingPageId,b64Str];
+//                
+//            }
+//            productVO.mallDefaultURL = urlStr;
+//            DebugLog(@"enterWap -- url is:\n%@",urlStr);
+//            [SharedDelegate enterWap:4 invokeUrl:urlStr isClearCookie:YES];
+//        }
+//        else
+//        {
+            OTSProductDetail *productDetail=[[[OTSProductDetail alloc] initWithProductId:[productVO.productId longLongValue] promotionId:nil fromTag:PD_FROM_CATEGORY] autorelease];
+            [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+            [self pushVC:productDetail animated:YES];
+//        }
+        
+        
+        
+        
+        //     1号店 原版
+        //        更多cell不可选
+        /*if (indexPath.row==self.productsArray.count)
+        {
+            return;
+        }
+        ProductVO *productVO = [self.productsArray objectAtIndex:indexPath.row];
+        
+        if (productVO.isYihaodian && productVO.isYihaodian.intValue == 0)
+        {
+            //更新最近浏览信息
+            [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadAddBrowse:) toTarget:self withObject:productVO];
+            // 1MALL的商品
+            DebugLog(@"enter 1mall!!!!");
+            NSString *urlStr;
+            NSString* landingPageId;
+            if (productVO.promotionId)
+            {
+                landingPageId = productVO.promotionId;
+            }
+            else
+            {
+                landingPageId = @"";
+            }
+            if ([GlobalValue getGlobalValueInstance].token == nil)
+            {
+                urlStr = [URL_BASE_MALL_NO_ONE stringByAppendingFormat:@"%@/%@/%@?osType=30",productVO.productId,[GlobalValue getGlobalValueInstance].provinceId,landingPageId];
+            }
+            else
+            {
+                // 对 token 进行base64加密
+                NSData *b64Data = [GTMBase64 encodeData:[[GlobalValue getGlobalValueInstance].token dataUsingEncoding:NSUTF8StringEncoding]];
+                NSString* b64Str = [[[NSString alloc] initWithData:b64Data encoding:NSUTF8StringEncoding] autorelease];
+                
+                urlStr = [URL_BASE_MALL_NO_ONE stringByAppendingFormat:@"%@/%@/%@?token=%@&osType=30",productVO.productId,[GlobalValue getGlobalValueInstance].provinceId,landingPageId,b64Str];
+                
+            }
+            productVO.mallDefaultURL = urlStr;
+            DebugLog(@"enterWap -- url is:\n%@",urlStr);
+            [SharedDelegate enterWap:4 invokeUrl:urlStr isClearCookie:YES];
+        }else{
+            OTSProductDetail *productDetail=[[[OTSProductDetail alloc] initWithProductId:[productVO.productId longValue] promotionId:productVO.promotionId fromTag:PD_FROM_CATEGORY] autorelease];
+            [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+            [self pushVC:productDetail animated:YES];
+        }*/
+    }
+    else
+    {
+        m_IsOriginal=YES;
+        if (cateBtn.tag)
+        {
+            
+            OTS_SAFE_RELEASE(m_FilterDictionary);
+            
+            CategoryInfo *catevo=[categoryTypeArray objectAtIndex:indexPath.row];
+            
+            if ([catevo.name hasPrefix:@"全部"])
+            {
+                //如果是全部或者返回上一级
+                [cateBtn setTitle:@"全部分类" forState:UIControlStateNormal];
+                
+                _bSelectAllCategory = YES;
+                [self reloadProductsTable];
+            }
+            else if([catevo.name hasPrefix:BACKUPLEVEL])
+            {
+                //如果是上一级
+                _bSelectAllCategory = NO;
+                [cateBtn setTitle:@"全部分类" forState:UIControlStateNormal];
+                
+                if ([_currentCategory.parentId intValue] != -2)
+                {
+                    self.currentCategory = [self getCategoryByCid:_currentCategory.parentId];
+                }
+                
+                [self updateSelectionTable];
+                [self cateTableAnimation:indexPath.row];
+            }
+            else
+            {                
+                _bSelectAllCategory = NO;
+                self.currentCategory = catevo;
+                //如果不是全部或者返回上一级
+                if (![self hasSonCategory:catevo.cid])
+                {
+                    //如果没有下一级,就刷新商品列表
+                    [cateBtn setTitle:catevo.name forState:UIControlStateNormal];
+                    [self reloadProductsTable];
+                }
+                else
+                {
+                    self.currentCategory = catevo;
+                    [self updateSelectionTable];
+                    [self cateTableAnimation:indexPath.row];
+                }
+            }
+            
+            
+            //1号店原版
+            /*OTS_SAFE_RELEASE(m_FilterDictionary);
+            
+            CategoryVO*catevo=[categoryTypeArray objectAtIndex:indexPath.row];
+            self.cateId=catevo.nid;
+            if ([catevo.categoryName hasPrefix:@"全部"]||[catevo.categoryName hasPrefix:BACKUPLEVEL])
+            {
+                [cateBtn setTitle:@"全部分类" forState:UIControlStateNormal];
+                if ([catevo.categoryName hasPrefix:BACKUPLEVEL]&&[self.trackCategoryIdArray count]>3)
+                {
+                    self.cateId = [self.trackCategoryIdArray objectAtIndex:1];
+                }
+            }
+            else
+            {
+                //显示不超过6个字
+                NSMutableString* cateTilte=[NSMutableString stringWithString:catevo.categoryName];
+                if (cateTilte.length>5) {
+                    cateTilte=[NSMutableString stringWithFormat:@"%@... ",[cateTilte substringToIndex:5]];
+                }
+                [cateBtn setTitle:cateTilte forState:UIControlStateNormal];
+            }
+            if (isCashPromotionList)
+            {
+                
+                [self reloadProductsTable];
+            }
+            else
+            {
+                __block Page *tempPage = nil;
+                [self performInThreadBlock:^()
+                {
+                    tempPage = [[[OTSServiceHelper sharedInstance] getCategoryByRootCategoryId:[GlobalValue getGlobalValueInstance].trader mcsiteId:[NSNumber numberWithInt:1] rootCategoryId:self.cateId currentPage:[NSNumber numberWithInt:1] pageSize:[NSNumber numberWithInt:50]] retain];
+                } completionInMainBlock:^(){
+                    // **说明 继续分类的条件1.当前分类下面有值；2.当前不是全部分类；3.当前分类不是第三级分类
+                    if (tempPage.objList.count>0&&![catevo.categoryName hasPrefix:@"全部"]) {
+                        self.categoryTypeArray = tempPage.objList;
+                        
+                        CategoryVO *allVO=[[CategoryVO alloc] init];
+                        allVO.categoryName=[NSString stringWithFormat:@"全部(%@)",catevo.categoryName];
+                        if ([catevo.categoryName isEqualToString:BACKUPLEVEL]) {
+                            NSString *cateTitle = [self.trackCategoryDic objectForKey:self.cateId];
+                            
+                            allVO.categoryName=[NSString stringWithFormat:@"全部(%@)",cateTitle==nil?@"全部分类":cateTitle];
+                        }
+                        allVO.nid=self.cateId;
+                        NSMutableArray* tempArray=[[NSMutableArray alloc] init];
+                        [tempArray addObjectsFromArray:categoryTypeArray];
+                        [tempArray insertObject:allVO atIndex:0];
+                        [allVO release];
+                        
+                        if (![catevo.categoryName isEqualToString:BACKUPLEVEL]) {
+                            [self.trackCategoryDic setObject:catevo.categoryName forKey:catevo.nid];
+                        }
+                        self.categoryTypeArray=tempArray;
+                        [self initFilter];
+                        [self updateSelectionTable];
+                        [tempArray release];
+                        [tempPage release];
+                        
+                        //点击分类的动画效果，上一级，pop，下一级 push  by yj
+                        [self cateTableAnimation:indexPath.row];
+                    }
+                    else
+                    {
+                        [self reloadProductsTable];
+                    }
+                }];
+            }*/
+        }
+        else
+        {
+            NSString* sort=[sortArray objectAtIndex:indexPath.row];
+            if ([sort isEqualToString:@"默认排序"])
+            {
+                sortType=SORT_BY_DEFAULT;
+                selectionType=0;
+            }else if ([sort isEqualToString:@"销量最高"]) {
+                sortType=SORT_BY_SALE;
+                selectionType=1;
+            }else if ([sort isEqualToString:@"价格最低"]) {
+                sortType=SORT_BY_PRICE_ASC;
+                selectionType=2;
+            }else if ([sort isEqualToString:@"价格最高"]) {
+                sortType=SORT_BY_PRICE_DESC;
+                selectionType=3;
+            }else if ([sort isEqualToString:@"最近发布"]) {
+                sortType=SORT_BY_TIME;
+                selectionType=4;
+            }
+            [sortBtn setTitle:sort forState:UIControlStateNormal];
+            [self reloadProductsTable];
+        }
+    }
+}
+
+-(void)newThreadAddBrowse:(ProductVO *)productVO
+{
+    NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
+    BrowseService *bServ=[[[BrowseService alloc] init] autorelease];
+    int rowcount = [bServ queryBrowseHistoryByIdCount:productVO.productId];
+    @try {
+        if (rowcount) {
+            //productid存在则更新
+            [bServ updateBrowseHistory:productVO provice:PROVINCE_ID];
+        }
+        else {
+            [bServ saveBrowseHistory:productVO province:PROVINCE_ID];
+        }
+    }
+    @catch (NSException *exception) {
+        
+    }
+    @finally {
+        
+    }
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"RefleshImmediately" object:nil];
+    [pool drain];
+}
+
+-(void)reloadProductsTable
+{
+    promoteBar.hidden = NO;
+    m_CurrentPageIndex=1;
+    [self.productsArray removeAllObjects];
+    [productsTable reloadData];
+    productsTable.hidden=YES;
+    [self sendRequset];
+    selectionBG.hidden=YES;
+    [self showLoading:YES];
+    [self dismissSelection];
+}
+
+-(void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (tableView==productsTable) {
+        if (indexPath.row >= [self.productsArray count]-2 && [self.productsArray count]<m_ProductTotalCount) {
+            if (!isLoadingMore) {
+                [tableView loadingMoreWithFrame:CGRectMake(0, 0, tableView.frame.size.width, 40) target:self selector:@selector(getMoreProduct) type:UITableViewLoadingMoreForeIphone];
+                isLoadingMore = YES;
+            }
+        }
+    }
+}
+
+#pragma mark lifecycle
+- (void)viewDidUnload
+{
+    [super viewDidUnload];
+    // Release any retained subviews of the main view.
+}
+
+- (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation
+{
+    return (interfaceOrientation == UIInterfaceOrientationPortrait);
+}
+#pragma mark depretaMethod
+#pragma mark    购物车动画
+
+-(void)showBuyProductAnimationWithSelectedIndex:(NSNumber*)row{
+    
+    ProductVO * productVO = [self.productsArray objectAtIndex:row.intValue];
+    NSString* imageURLStr = [productVO miniDefaultProductUrl];
+    
+    // 算出对应的图片坐标
+    UITableViewCell* cell = [productsTable cellForRowAtIndexPath:[NSIndexPath indexPathForRow:row.intValue inSection:0]];
+    CGPoint point = cell.imageView.center;
+    point = [cell.imageView convertPoint:point toView:self.view];
+    
+    UIImageView* imageV = [[[UIImageView alloc]init]autorelease];
+    [imageV setImageWithURL:[NSURL URLWithString:imageURLStr] refreshCache:NO placeholderImage:[UIImage imageNamed:@"defaultimg76"]];
+    
+    [cartAnimation beginCartAnimationWithProductImageView:imageV point:point];
+    
+    // 更新购物车数字
+    [SharedDelegate setCartNum:[buyQuantity intValue]];
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"CartChanged" object:nil];
+    
+    if (isCratAnimation)
+    {
+		isCratAnimation=NO;
+        [SharedDelegate showAddCartAnimationWithDelegate:self];
+	}
+    
+    
+}
+-(void) animationFinished{
+    isCratAnimation = YES;
+}
+
+
+
+- (NSMutableArray*)getCateFromLocalByRootId:(NSString *)aRootId
+{
+    
+    NSString *filename=[OTSUtility documentDirectoryWithFileName:@"SaveRootCate_130508.plist"];
+    NSMutableArray *cateArr = [NSKeyedUnarchiver unarchiveObjectWithFile:filename];
+    NSLog(@"cate from Local %@",cateArr);
+    if (cateArr.count > 0)
+    {
+        NSMutableArray *resultArr = [NSMutableArray arrayWithArray:cateArr];
+        [self filterCategory:resultArr rootId:aRootId];
+        NSLog(@"filer cate %@",resultArr);
+        return resultArr;
+    }
+    return nil;
+}
+- (void)filterCategory:(NSMutableArray *)categoryArr rootId:(NSString *)aRootId
+{
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"self.parentId == %@",aRootId];
+    [categoryArr filterUsingPredicate:predicate];
+}
+
+- (BOOL)hasSonCategory:(NSString *)cid
+{
+    
+    NSArray *cateList = [self getCateFromLocalByRootId:cid];
+    if (cateList.count > 0)
+    {
+        return YES;
+    }
+    return NO;
+}
+- (CategoryInfo *)getCategoryByCid:(NSString *)cid
+{
+    NSString *filename=[OTSUtility documentDirectoryWithFileName:@"SaveRootCate_130508.plist"];
+    NSMutableArray *cateArr = [NSKeyedUnarchiver unarchiveObjectWithFile:filename];
+    for (CategoryInfo *cate in cateArr)
+    {
+        if ([cate.cid isEqualToString:cid])
+        {
+            return cate;
+        }
+    }
+    return nil;
+}
+
+- (void)initCategoryListFromProductList:(BOOL)flag
+{
+    NSMutableArray * categoryList = [self getCateFromLocalByRootId:flag? self.currentCategory.parentId : self.currentCategory.cid];
+    NSMutableArray *tempCateArr = [[NSMutableArray alloc] init];
+    if ([_currentCategory.cid intValue] != -1)
+    {
+        //不是第一级
+        CategoryInfo *category = [[CategoryInfo alloc] init];
+        category.name = BACKUPLEVEL;
+        [tempCateArr addObject:category];
+        [category release];
+    }
+    
+    CategoryInfo *category = [[CategoryInfo alloc] init];
+    category.name = @"全部";
+    [tempCateArr addObject:category];
+    [category release];
+    
+    [tempCateArr addObjectsFromArray:categoryList];
+    self.categoryTypeArray = tempCateArr;
+    [tempCateArr release];
+}
+@end

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+	<string>食品饮料排行榜</string>
+	<string>美护排行榜</string>
+	<string>母婴排行榜</string>
+	<string>厨卫排行榜</string>
+	<string>家居箱包排行榜</string>
+	<string>手机家电排行榜</string>
+	<string>玩具图书排行榜</string>
+	<string>营养保健排行榜</string>
+	<string>办公用户排行榜</string>
+</array>
+</plist>

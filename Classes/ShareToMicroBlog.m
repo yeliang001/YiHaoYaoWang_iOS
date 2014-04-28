@@ -1,0 +1,683 @@
+//
+//  ShareToMicroBlog.m
+//  TheStoreApp
+//
+//  Created by linyy on 11-7-21.
+//  Copyright 2011 vsc. All rights reserved.
+//
+
+#import "ShareToMicroBlog.h"
+#import "GlobalValue.h"
+#import "MicroBlogService.h"
+#import "OTSAlertView.h"
+
+#define SHARE_BUTTON_TRANSMIT_VALUE 15
+#define SINA_USER_NAME_TAG 1
+#define JIEPANG_USER_NAME_TAG 121
+#define SINA_PASSWORD_TAG 2
+#define JIEPANG_PASSWORD_TAG 122
+#define SHARE_SINA_TEXT_FIELD_TAG 4002
+#define SINA_ALERT_VIEW_TAG 10
+#define JIEPANG_ALERT_VIEW_TAG 1030
+#define LAND_BUTTON_TAG 12
+#define USER_INFO_WRONG_TAG 190
+#define USER_INFO_EMPTY_TAG 200
+#define SHARE_SINA_BUTTON_TAG 3
+
+
+@implementation ShareToMicroBlog
+
+@synthesize locationVO;
+@synthesize isFromGroupon;
+@synthesize isExclusive;
+
+-(id)init
+{
+    self = [super init];
+    
+    if (self)
+    {
+        if(blogService == nil)
+        {
+            blogService = [[MicroBlogService alloc] init];
+        }
+    }
+	
+	return self;
+}
+
+-(void)shareBlog:(NSString *)_content blogType:(ShareToMicroBlogType)blogType{
+	currentBlog=blogType;
+	content=[NSString stringWithString:_content];
+    [self showBlogAlertView:currentBlog];
+}
+-( NSMutableArray *)readFile:(ShareToMicroBlogType)blogType{
+    NSArray *paths=NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES);
+    NSString *path=[paths objectAtIndex:0];
+	NSString* filename = nil;
+	if (blogType == ShareToSina) {
+		filename=[path stringByAppendingPathComponent:@"SHARE_SINA.plist"];  
+	}
+	if (blogType == ShareToJiePang) {
+		filename=[path stringByAppendingPathComponent:@"SHARE_JP.plist"];  
+	}
+    NSMutableArray *userArray=[NSMutableArray arrayWithContentsOfFile:filename];
+    return userArray ;//tjs
+}
+-(void)writeFile:(ShareToMicroBlogType)blogType{
+
+    NSString *name_share= userName.text;
+    NSString *pwd_share= userPassword.text;
+    NSMutableArray *array=[[NSMutableArray alloc]init];
+    [array  addObject:name_share];
+    [array  addObject:pwd_share];
+    NSArray *paths=NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES);
+    NSString *path=[paths    objectAtIndex:0];
+	NSString* filename = nil;
+	if (blogType == ShareToSina) {
+		filename=[path stringByAppendingPathComponent:@"SHARE_SINA.plist"];  
+	}
+	if (blogType == ShareToJiePang) {
+		filename=[path stringByAppendingPathComponent:@"SHARE_JP.plist"];  
+	}
+    [array writeToFile:filename  atomically:NO];
+    [array release]; 
+}
+
+#pragma mark 自动登录调用该方法
+-(void)landInThread{
+	NSAutoreleasePool* pool = [[NSAutoreleasePool alloc]init];
+	BOOL isSuccess=[self landUser:[[self readFile:currentBlog]objectAtIndex:0] pass:[[self readFile:currentBlog]objectAtIndex:1] blogType:currentBlog];
+	if (isSuccess) {
+	
+		if(currentBlog==ShareToSina){
+			[[GlobalValue getGlobalValueInstance] setSinaUserName:[[self readFile:currentBlog]objectAtIndex:0]];
+			[[GlobalValue getGlobalValueInstance] setSinaPassword:[[self readFile:currentBlog]objectAtIndex:1]];
+			if(sinaAlert==nil){
+				sinaAlert = [[OTSAlertView alloc] initWithTitle:nil 
+													   message:@"\n\n\n\n\n\n" 
+													  delegate:self 
+											 cancelButtonTitle:nil
+											 otherButtonTitles: nil];
+			}
+		}
+		else if(currentBlog==ShareToJiePang){
+			[[GlobalValue getGlobalValueInstance] setJiePangUserName:[[self readFile:currentBlog]objectAtIndex:0]];
+			[[GlobalValue getGlobalValueInstance] setJiePangPassword:[[self readFile:currentBlog]objectAtIndex:1]];
+			if(jiePangAlert==nil){
+				jiePangAlert = [[OTSAlertView alloc] initWithTitle:nil 
+														  message:@"\n\n\n\n\n\n" 
+														 delegate:self 
+												cancelButtonTitle:nil
+												otherButtonTitles: nil];
+			}
+			[[NSNotificationCenter defaultCenter] postNotificationName:@"toLocationViewAfterJiePangLogin" object:nil];
+			[[NSNotificationCenter defaultCenter] postNotificationName:@"toNextViewFromProductDetail" object:nil];
+			//[self getLocationsInThread];
+			[pool drain];
+			return;
+		}
+		//NSLog(@"--------------------------suc");
+		[self performSelectorOnMainThread:@selector(showBlog:) withObject:nil waitUntilDone:NO];
+	}else {
+		[self performSelectorOnMainThread:@selector(landInThreadFail) withObject:nil waitUntilDone:NO];
+	}
+	[pool drain];
+}
+-(void)landInThreadFail{
+	if(currentBlog==ShareToSina){
+		[GlobalValue getGlobalValueInstance].sinaUserName=nil;
+		[GlobalValue getGlobalValueInstance].sinaPassword=nil;
+		if(sinaAlert==nil){
+			sinaAlert = [[OTSAlertView alloc] initWithTitle:nil 
+												   message:@"\n\n\n\n\n\n" 
+												  delegate:self 
+										 cancelButtonTitle:nil
+										 otherButtonTitles: nil];
+		}
+	}
+	if(currentBlog==ShareToJiePang){
+		[GlobalValue getGlobalValueInstance].jiePangUserName=nil;
+		[GlobalValue getGlobalValueInstance].jiePangPassword=nil;
+		if(jiePangAlert==nil){
+			jiePangAlert = [[OTSAlertView alloc] initWithTitle:nil 
+												   message:@"\n\n\n\n\n\n" 
+												  delegate:self 
+										 cancelButtonTitle:nil
+										 otherButtonTitles: nil];
+		}
+	}
+	[self showLoginView:currentBlog];
+}
+
+-(void)showBlogAlertView:(ShareToMicroBlogType)blogType{
+
+	currentBlog=blogType;
+	[[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+	if(currentBlog==ShareToSina){
+//		if([GlobalValue getGlobalValueInstance].sinaUserName!=nil && [GlobalValue getGlobalValueInstance].sinaPassword!=nil){
+//			[self showBlog:currentBlog];
+//			return;
+//		}
+
+		if ([[self readFile:currentBlog] count]== 2) {
+			[self otsDetatchMemorySafeNewThreadSelector:@selector(landInThread) toTarget:self withObject:nil];
+			return;
+		}
+		
+		if(sinaAlert==nil){
+			sinaAlert = [[OTSAlertView alloc] initWithTitle:nil 
+												   message:@"\n\n\n\n\n\n" 
+												  delegate:self 
+										 cancelButtonTitle:nil
+										 otherButtonTitles: nil];
+		}
+		[sinaAlert setBackgroundColor:[UIColor clearColor]];
+		[sinaAlert setTag:SINA_ALERT_VIEW_TAG];
+	}
+	else if(currentBlog==ShareToJiePang){
+		
+//		if([GlobalValue getGlobalValueInstance].jiePangUserName!=nil && [GlobalValue getGlobalValueInstance].jiePangPassword!=nil){
+//			[self showBlog:currentBlog];
+//			return;
+//		}
+		if ([[self readFile:currentBlog] count]== 2) {
+			[self otsDetatchMemorySafeNewThreadSelector:@selector(landInThread) toTarget:self withObject:nil];
+			return;
+		}
+		
+		if(jiePangAlert==nil){
+			jiePangAlert = [[OTSAlertView alloc] initWithTitle:nil 
+													  message:@"\n\n\n\n\n\n" 
+													 delegate:self 
+											cancelButtonTitle:nil
+											otherButtonTitles:nil];
+		}
+		[jiePangAlert setBackgroundColor:[UIColor clearColor]];
+		[jiePangAlert setTag:JIEPANG_ALERT_VIEW_TAG];
+	}
+	[self showLoginView:currentBlog];
+}
+
+-(void)shareProduct:(NSString *)pName price:(NSString *)pPrice productId:(NSString *)pId blogType:(ShareToMicroBlogType) blogType
+{
+	currentBlog=blogType;
+	if(currentBlog==ShareToSina)
+    {
+//        if (isFromGroupon) {
+//            if (isExclusive)
+//            {
+//                content = [[NSString stringWithFormat:@"@1号店 掌上专享团购：%@ 更多精彩团购尽在1号店，马上下载：http://www.yihaodian.com/cms/view.do?topicId=13483",pName] retain];
+//            }
+//            else
+//            {
+//                content = [[NSString stringWithFormat:@"@1号店 今日热卖团购：%@ http://www.yihaodian.com/tuangou/index.do?grouponId=%@",pName,pId] retain];
+//            }
+//        } else {
+            content = [[NSString stringWithFormat:@"我在1号药店发现了%@，%@元，快来抢购吧！http://m.yihaodian.com/p/%@_%@_7551389（@1号药店，轻松享受一站式网上购物)",pName,pPrice,pId,[GlobalValue getGlobalValueInstance].provinceId] retain];
+//        }
+	}
+	[self showBlogAlertView:currentBlog];
+}
+
+-(void)shareString:(NSString *)string blogType:(ShareToMicroBlogType)blogType
+{
+    currentBlog=blogType;
+	if(currentBlog==ShareToSina)
+    {
+        content = [[NSString alloc] initWithString:string];
+    }
+    
+    [self showBlogAlertView:currentBlog];
+}
+
+-(void)shareOrder:(NSString *)pName price:(NSString *)pPrice productId:(NSString *)pId blogType:(ShareToMicroBlogType) blogType{
+	currentBlog=blogType;
+	if(currentBlog==ShareToSina){
+		content = [[NSString stringWithFormat:
+					@"我在 @1号药店 发现了%@，￥%@元，快来抢购吧！http://m.yihaodian.com/p/%@_%@_755138（一站式拇指购物）",
+					pName, pPrice, pId, [GlobalValue getGlobalValueInstance].provinceId] retain];
+	}
+	[self showBlogAlertView:currentBlog];
+}
+
+-(void)shareMessage:(NSString *)messageContent blogType:(ShareToMicroBlogType) blogType{
+	currentBlog=blogType;
+	content = [[NSString stringWithString:messageContent] retain];
+	[self showBlogAlertView:currentBlog];
+}
+
+-(BOOL)landUser:(NSString *)name pass:(NSString *)password blogType:(ShareToMicroBlogType)blogType{
+	currentBlog=blogType;
+	if([blogService shareCheck:name password:password targetId:(long)blogType]==1){
+        return YES;
+    }
+	return NO;
+}
+
+-(void)getLocationsOnShow:(ShareToMicroBlogType)blogType pageNum:(long)pageNum count:(long)count 
+					  query:(NSString *)query city:(NSString *)city lon:(float)lon lat:(float)lat{
+	currentBlog=blogType;
+	myLat = lat;
+	myLon = lon;
+	myCity = city;
+	myQuery = query;
+	myPageNum = pageNum;
+	myCount = count;
+	currentBlog = blogType;
+	if(currentBlog==ShareToSina){
+		if(!([GlobalValue getGlobalValueInstance].sinaUserName!=nil && [GlobalValue getGlobalValueInstance].sinaPassword!=nil)){
+			[self showBlogAlertView:currentBlog];
+		}
+		else {
+			
+		}
+	}
+	else if(currentBlog==ShareToJiePang){
+		if(!([GlobalValue getGlobalValueInstance].jiePangUserName!=nil && [GlobalValue getGlobalValueInstance].jiePangPassword!=nil)){
+			[self showBlogAlertView:currentBlog];
+		}
+		else {
+			[self otsDetatchMemorySafeNewThreadSelector:@selector(getLocationsInThread) toTarget:self withObject:nil];
+		}
+	}
+}
+
+-(LocationVO *)getLocations:(ShareToMicroBlogType)blogType pageNum:(long)pageNum count:(long)count 
+					  query:(NSString *)query city:(NSString *)city lon:(float)lon lat:(float)lat{
+	currentBlog=blogType;
+	return [blogService locations:[GlobalValue getGlobalValueInstance].jiePangUserName 
+						 password:[GlobalValue getGlobalValueInstance].jiePangPassword targetId:(long)currentBlog
+						  pageNum:pageNum count:count query:query city:city lon:lon lat:lat];
+}
+
+-(SyncVO *)getSynchronousVO:(NSString *)name password:(NSString *)password blogType:(ShareToMicroBlogType)blogType{
+	currentBlog=blogType;
+	return [blogService syncs:name password:password targetId:(long)currentBlog];
+}
+
+-(StatusVO *)checkin:(NSString *)name password:(NSString *)password 
+			blogType:(ShareToMicroBlogType)blogType comment:(NSString *)comment guid:(NSString *)guid syncs:(NSString *)syncs{
+	currentBlog=blogType;
+	return [blogService checkin:name password:password targetId:(long)currentBlog comment:comment guid:guid syncs:syncs];
+}
+
+-(void)saveShow:(NSString *)aid userName:(NSString *)u orderCode:(NSString *)oid 
+	  productId:(NSString *)pid merchantId:(NSString *)mid pronvinceId:(NSString *)vid 
+		   gpsX:(NSString *)gx gpsY:(NSString *)gy targetId:(NSString *)tid fromId:(NSString *)fid{
+	if([blogService exists:aid userName:u orderCode:oid productId:pid pronvinceId:vid]==0){
+		[blogService saveShow:aid userName:u orderCode:oid productId:pid merchantId:mid 
+				  pronvinceId:vid gpsX:gx gpsY:gy targetId:tid fromId:fid];
+	}
+}
+
+#pragma mark 键盘响应事件
+-(BOOL)textFieldShouldReturn:(UITextField *)textField{
+//	if (textField.tag==SINA_USER_NAME_TAG || textField.tag==JIEPANG_USER_NAME_TAG) {
+	if (textField==userName ) {
+
+		[userName resignFirstResponder];
+		[userPassword becomeFirstResponder];
+
+	}else {
+		if(currentBlog==ShareToSina){
+			[sinaAlert dismissWithClickedButtonIndex:0 animated:NO];
+		}
+		else if(currentBlog==ShareToJiePang){
+			[jiePangAlert dismissWithClickedButtonIndex:0 animated:NO];
+		}
+		NSString *user=[userName.text stringByReplacingOccurrencesOfString:@" " withString:@""];//清空字符串
+		NSString *pass=[userPassword.text stringByReplacingOccurrencesOfString:@" " withString:@""];
+
+		if ([user length]>0 && [pass length]>0) {																//如果输入框里都有字符
+			[self otsDetatchMemorySafeNewThreadSelector:@selector(shareInThread) toTarget:self withObject:nil];		
+		}else {																									//如果输入框有一个为空
+            [[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+			UIAlertView *alert=[[OTSAlertView alloc] initWithTitle:nil 
+														  message:@"用户名和密码不能为空" 
+														 delegate:self 
+												cancelButtonTitle:@"确定" 
+												otherButtonTitles:nil];
+			[alert show];
+			[alert release];
+			//alert=nil;
+			[userName setText:@""];
+			[userPassword setText:@""];
+		}
+	}
+	return YES;
+}
+
+#pragma mark 自己编辑框中输入的话，调用该方法
+-(void)shareInThread{
+	NSAutoreleasePool* pool = [[NSAutoreleasePool alloc]init];
+	//NSLog(@"----userName:----%@",userName.text);
+	//NSLog(@"----userPassword:----%@",userPassword.text);
+	BOOL isSuccess=[self landUser:userName.text pass:userPassword.text blogType:currentBlog];
+	if (isSuccess) {
+		//NSLog(@"--YES");
+		[self writeFile:currentBlog];
+		//如果登录成功
+		if(currentBlog==ShareToSina){
+			[[GlobalValue getGlobalValueInstance] setSinaUserName:[NSString stringWithString:userName.text]];
+			[[GlobalValue getGlobalValueInstance] setSinaPassword:[NSString stringWithString:userPassword.text]];
+		}
+		else if(currentBlog==ShareToJiePang){
+			[[GlobalValue getGlobalValueInstance] setJiePangUserName:[NSString stringWithString:userName.text]];
+			[[GlobalValue getGlobalValueInstance] setJiePangPassword:[NSString stringWithString:userPassword.text]];
+			[[NSNotificationCenter defaultCenter] postNotificationName:@"toLocationViewAfterJiePangLogin" object:nil];
+			[[NSNotificationCenter defaultCenter] postNotificationName:@"toNextViewFromProductDetail" object:nil];
+			//[self getLocationsInThread];
+			
+			[pool drain];
+			return;
+		}
+		[self performSelectorOnMainThread:@selector(showBlog:) withObject:nil waitUntilDone:NO];
+	}
+	else {	
+		//NSLog(@"--NO");
+
+		//如果登录失败
+		[self performSelectorOnMainThread:@selector(shareInThreadFail) withObject:nil waitUntilDone:NO];
+	}
+	[pool drain];
+}
+-(void)shareInThreadFail{
+	[[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+	UIAlertView *alert=[[OTSAlertView alloc] initWithTitle:nil 
+												  message:@"用户名或密码错误！" 
+												 delegate:self 
+										cancelButtonTitle:@"确定" 
+										otherButtonTitles:nil];
+	[alert show];
+	[alert release];
+	[userName setText:@""];
+	[userPassword setText:@""];
+	if(currentBlog==ShareToSina){
+		[GlobalValue getGlobalValueInstance].sinaUserName=nil;
+		[GlobalValue getGlobalValueInstance].sinaPassword=nil;
+	}
+	else if(currentBlog==ShareToJiePang){
+		[GlobalValue getGlobalValueInstance].jiePangUserName=nil;
+		[GlobalValue getGlobalValueInstance].jiePangPassword=nil;
+	}
+}
+
+-(void)getLocationsInThread{
+	NSAutoreleasePool* pool = [[NSAutoreleasePool alloc]init];
+    
+	self.locationVO = [blogService locations:[GlobalValue getGlobalValueInstance].jiePangUserName 
+									password:[GlobalValue getGlobalValueInstance].jiePangPassword targetId:(long)currentBlog
+									 pageNum:myPageNum count:myCount query:myQuery city:myCity lon:myLon lat:myLat];
+	[[NSNotificationCenter defaultCenter] postNotificationName:@"toJiePangGetLocations" object:self.locationVO];
+	[pool drain];
+}
+
+-(void)closeKeyBoard:(id)sender{
+	[[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:NO];
+	[[NSNotificationCenter defaultCenter] postNotificationName:@"enableWeiboBtn" object:nil];
+	if(currentBlog==ShareToSina){
+		[sinaAlert dismissWithClickedButtonIndex:0 animated:NO];
+	}
+	else if(currentBlog==ShareToJiePang){
+		[jiePangAlert dismissWithClickedButtonIndex:0 animated:NO];
+	}
+	UIButton *button=(UIButton *)sender;
+	if (button.tag==LAND_BUTTON_TAG) {
+		NSString *user=[userName.text stringByReplacingOccurrencesOfString:@" " withString:@""];//清空字符串
+		NSString *pass=[userPassword.text stringByReplacingOccurrencesOfString:@" " withString:@""];
+		if ([user length]>0&&[pass length]>0) {
+            [self otsDetatchMemorySafeNewThreadSelector:@selector(shareInThread) toTarget:self withObject:nil];
+		}
+		else{
+			[[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+			UIAlertView *alert=[[OTSAlertView alloc] initWithTitle:nil 
+														  message:@"用户名和密码不能为空" 
+														 delegate:self 
+												cancelButtonTitle:@"确定" 
+												otherButtonTitles:nil];
+			[alert show];
+			[alert release];
+			//alert=nil;
+			[userName setText:@""];
+			[userPassword setText:@""];
+		}
+	}
+	if (button.tag==SHARE_SINA_BUTTON_TAG) {//分享到新浪微博		
+        content=[NSString stringWithString:shareText.text];
+		if([content length]>140){
+            /*
+			UIAlertView *alert=[[OTSAlertView alloc] initWithTitle:nil 
+														  message:@"微博太长，请确认不超过140个字符" 
+														 delegate:self 
+												cancelButtonTitle:@"确定" 
+												otherButtonTitles:nil];
+			[alert show];
+			[alert release];
+             */
+         //大于140个字截取 并且保留完整的链接地址
+            NSArray *array = [content componentsSeparatedByString:@"http"];
+            NSString *part1 = [array objectAtIndex:0];
+            NSString *part2 = [array objectAtIndex:1];
+            part1 = [part1 substringToIndex:(137 - 4 - [part2 length])];
+            part1 = [part1 stringByAppendingString:@"..."];
+            part2 = [@"http" stringByAppendingString:part2];
+//            NSLog(@"dddd %@||| %@",part1,part2);
+            content = [part1 stringByAppendingString:part2];
+		}
+		if([[content stringByReplacingOccurrencesOfString:@" " withString:@""] length] < 1){
+			UIAlertView *alert=[[OTSAlertView alloc] initWithTitle:nil 
+														  message:@"内容不能为空" 
+														 delegate:self 
+												cancelButtonTitle:@"确定" 
+												otherButtonTitles:nil];
+			[alert show];
+			[alert release];
+			return;
+		}
+
+        [blogService sharePublish:[GlobalValue getGlobalValueInstance].sinaUserName 
+						 password:[GlobalValue getGlobalValueInstance].sinaPassword 
+						 targetId:1l comment:content guid:nil syncs:nil];
+		
+		[[NSNotificationCenter defaultCenter] postNotificationName:@"toMyOrderViewAfterWeiboShare" object:nil];
+		
+	}
+}
+
+-(void)showBlog:(ShareToMicroBlogType)blogType{
+	//currentBlog=blogType;
+	[[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+	if(currentBlog==ShareToSina){
+		if(sinaAlert!=nil){
+			sinaAlert = [[OTSAlertView alloc] initWithTitle:nil 
+												   message:@"\n\n\n\n\n\n" 
+												  delegate:self 
+										 cancelButtonTitle:nil
+										 otherButtonTitles:nil];
+		}
+	
+		UIButton * cloaseSinaBtn=[[UIButton alloc] initWithFrame:CGRectMake(250, -15, 43, 43)];
+		[cloaseSinaBtn addTarget:self action:@selector(closeKeyBoard:) forControlEvents:UIControlEventTouchUpInside];
+	
+		UIButton * delImg=[[UIButton alloc] initWithFrame:CGRectMake(10, 10, 23, 23)];
+		[delImg setBackgroundImage:[UIImage imageNamed:@"del_sina.png"] forState:UIControlStateNormal];
+		[delImg setUserInteractionEnabled:NO];
+		[cloaseSinaBtn addSubview:delImg];
+		[delImg release];
+		[sinaAlert addSubview:cloaseSinaBtn];
+		[cloaseSinaBtn release];
+	
+		UIButton * sinaLogo=[[UIButton alloc] initWithFrame:CGRectMake(20, 5, 32, 32)];
+		[sinaLogo setBackgroundImage:[UIImage imageNamed:@"sina_logo.png"] forState:UIControlStateNormal];
+	
+		[sinaAlert addSubview:sinaLogo];
+		[sinaLogo release];
+	
+		UILabel *alertLabel=[[UILabel alloc] initWithFrame:CGRectMake(55, 15, 250, 20)];
+		[alertLabel setBackgroundColor:[UIColor clearColor]];//分享title
+		[alertLabel setText:@"分享到新浪微博"];
+		[alertLabel setTextColor:[UIColor whiteColor]];
+		[sinaAlert addSubview:alertLabel];
+		[alertLabel release];
+	
+		if(shareText==nil){
+			shareText=[[UITextView alloc] initWithFrame:CGRectMake(20, 50, 250, 90)];	//分享的文字输入框
+		}
+		shareText.backgroundColor=[UIColor whiteColor];
+		[shareText setText:[NSString stringWithString:content]];
+		[shareText setTag:SHARE_SINA_TEXT_FIELD_TAG];
+		[shareText setDelegate:self];
+		[sinaAlert addSubview:shareText];
+	
+		if(contentLength==nil){
+			contentLength=[[UILabel alloc] initWithFrame:CGRectMake(20, 150, 120, 20)];		//字数
+		}
+		contentLength.text=[NSString stringWithFormat:@"%d",[shareText.text length]];
+		[contentLength setBackgroundColor:[UIColor clearColor]];
+		[contentLength setTextColor:[UIColor whiteColor]];
+		[sinaAlert addSubview:contentLength];
+	
+		UIButton * shareBtn=[[UIButton alloc] initWithFrame:CGRectMake(150, 150, 120, 40)];		//分享按钮
+		[shareBtn setTitle:@"分享" forState:UIControlStateNormal];
+		[shareBtn setBackgroundImage:[UIImage imageNamed:@"land_sina.png"] forState:UIControlStateNormal];
+		[shareBtn setTag:SHARE_SINA_BUTTON_TAG];
+		[shareBtn addTarget:self action:@selector(closeKeyBoard:) forControlEvents:UIControlEventTouchUpInside];
+		[sinaAlert addSubview:shareBtn];
+		[shareBtn release];
+	
+		[sinaAlert show];
+	}
+}
+
+-(void)sharePublish:(NSString *)name password:(NSString *)password 
+		   targetId:(long)targetId comment:(NSString *)comment guid:(NSString *)guid syncs:(NSString *)syncs{
+	[blogService sharePublish:name password:password
+					 targetId:targetId comment:comment guid:guid syncs:syncs];
+}
+
+-(void)alertView:(UIAlertView *)alertView didDismissWithButtonIndex:(NSInteger)buttonIndex{
+	[[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:NO];
+}
+
+-(void)showLoginView:(ShareToMicroBlogType)blogType{
+    currentBlog=blogType;
+	UIButton * cloaseSinaBtn=[[UIButton alloc] initWithFrame:CGRectMake(250, -15, 43, 43)];
+	[cloaseSinaBtn addTarget:self action:@selector(closeKeyBoard:) forControlEvents:UIControlEventTouchUpInside];
+	
+	UIButton * delImg=[[UIButton alloc] initWithFrame:CGRectMake(10, 10, 23, 23)];
+	[delImg setBackgroundImage:[UIImage imageNamed:@"del_sina.png"] forState:UIControlStateNormal];
+	[delImg setUserInteractionEnabled:NO];
+	[cloaseSinaBtn addSubview:delImg];
+	[delImg release];
+    if(currentBlog==ShareToSina){
+        [sinaAlert addSubview:cloaseSinaBtn];
+    }
+    else if(currentBlog==ShareToJiePang){
+        [jiePangAlert addSubview:cloaseSinaBtn];
+    }
+	[cloaseSinaBtn release];
+	
+	UILabel * alertTitle=[[UILabel alloc] initWithFrame:CGRectMake(20, 15, 250, 20)];						//alert标题
+	if(currentBlog==ShareToSina){
+		alertTitle.text=@"登录到新浪微博分享";
+	}
+	else if(currentBlog==ShareToJiePang){
+		alertTitle.text=@"登录到街旁";
+	}
+	alertTitle.textColor=[UIColor whiteColor];
+	alertTitle.backgroundColor=[UIColor clearColor];
+	if(currentBlog==ShareToSina){
+		[sinaAlert addSubview:alertTitle];
+	}
+	else if(currentBlog==ShareToJiePang){
+		[jiePangAlert addSubview:alertTitle];
+	}
+	[alertTitle release];
+	
+	if(userName==nil){
+		userName=[[UITextField alloc] initWithFrame:CGRectMake(20, 50, 250, 35)];								//用户名称输入框
+	}
+	userName.backgroundColor=[UIColor whiteColor];
+	userName.returnKeyType=UIReturnKeyNext;
+	if(currentBlog==ShareToSina){
+		userName.placeholder=@"邮箱/会员帐号/手机号";
+	}
+	else if(currentBlog==ShareToJiePang){
+		userName.placeholder=@"街旁帐号";
+	}
+	userName.delegate=self;
+	if(currentBlog==ShareToSina){
+		[userName setTag:SINA_USER_NAME_TAG];
+		[sinaAlert addSubview:userName];
+	}
+	else if(currentBlog==ShareToJiePang){
+		[userName setTag:JIEPANG_USER_NAME_TAG];
+		[jiePangAlert addSubview:userName];
+	}
+	[userName setText:@""];
+	
+	if(userPassword==nil){
+		userPassword=[[UITextField alloc] initWithFrame:CGRectMake(20, 100, 250, 35)];							//密码输入框
+	}
+	userPassword.backgroundColor=[UIColor whiteColor];
+	userPassword.secureTextEntry=YES;
+	userPassword.returnKeyType=UIReturnKeyDone;
+	userPassword.placeholder=@"请输入密码";
+	userPassword.delegate=self;
+	if(currentBlog==ShareToSina){
+		[userName setTag:SINA_PASSWORD_TAG];
+	}
+	else if(currentBlog==ShareToJiePang){
+		[userName setTag:JIEPANG_PASSWORD_TAG];
+	}
+	[userPassword becomeFirstResponder];
+	if(currentBlog==ShareToSina){
+		[sinaAlert addSubview:userPassword];
+	}
+	else if(currentBlog==ShareToJiePang){
+		[jiePangAlert addSubview:userPassword];
+	}
+	[userPassword setText:@""];
+	
+	UIButton *landButton=[[UIButton alloc] initWithFrame:CGRectMake(150, 150, 120, 40)];					//登录按钮
+	[landButton setTitle:@"登录" forState:UIControlStateNormal];
+	[landButton setBackgroundImage:[UIImage imageNamed:@"land_sina.png"] forState:UIControlStateNormal];
+	[landButton setTag:LAND_BUTTON_TAG];
+	[landButton addTarget:self action:@selector(closeKeyBoard:) forControlEvents:UIControlEventTouchUpInside];
+	if(currentBlog==ShareToSina){
+		[sinaAlert addSubview:landButton];
+	}
+	else if(currentBlog==ShareToJiePang){
+		[jiePangAlert addSubview:landButton];
+	}
+	[landButton release];
+	if(currentBlog==ShareToSina){
+		[sinaAlert show];
+	}
+	else if(currentBlog==ShareToJiePang){
+		[jiePangAlert show];
+	}
+	[userName becomeFirstResponder];
+}
+
+- (void)textViewDidChange:(UITextView *)textView{
+	switch (textView.tag) {
+		case SHARE_SINA_TEXT_FIELD_TAG:
+			[contentLength setText:[NSString stringWithFormat:@"%d",[shareText.text length]]];
+			break;
+		default:
+			break;
+	}
+}
+
+-(void)dealloc{
+	[userName release];
+    [userPassword release];
+    if(blogService!=nil){
+        [blogService release];
+    }
+	[super dealloc];
+}
+
+@end

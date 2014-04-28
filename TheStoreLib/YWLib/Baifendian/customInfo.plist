@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>%appkey</key>
+	<string>0ebffeeefbdea23f83e4c047851e6f26</string>
+	<key>report_policy</key>
+	<string>by_interval</string>
+	<key>report_interval_millis</key>
+	<string>1200000</string>
+	<key>session_timeout_millis</key>
+	<string>1800000</string>
+</dict>
+</plist>

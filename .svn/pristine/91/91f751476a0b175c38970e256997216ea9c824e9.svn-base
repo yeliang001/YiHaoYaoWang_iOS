@@ -1,0 +1,51 @@
+//
+// Prefix header for all source files of the 'iPadTarget' target in the 'iPadTarget' project
+//
+
+#import <Availability.h>
+
+#ifndef __IPHONE_3_0
+#warning "This project uses features only available in iOS SDK 3.0 and later."
+#endif
+
+#ifdef __OBJC__
+    #import <UIKit/UIKit.h>
+    #import <Foundation/Foundation.h>
+    #import "OTSEverybodyWantsMe.h"
+    #import "AppDelegate.h"
+    #import "OTSNaviAnimation.h"
+    #import "CartVO+ProductCart.h"
+    #import "OtsErrorHandler.h"
+#import "OTSUserLoginHelper.h"
+#import "OTSUserSwitcher.h"
+#import "OTSUtility.h"
+
+#endif
+
+
+
+#define kTopHeight 55
+#define kCartViewWidth 69
+#define kCartViewWidthExtend 49
+#define kProducrListTopHeight 42
+
+#define PAD_NOTIFY_UPDATE_CART  @"PAD_NOTIFY_UPDATE_CART"   //刷新购物车
+
+#define PAD_NOTIFY_ADD_PRODUCT_RESULT           @"PAD_NOTIFY_ADD_PRODUCT_RESULT"    // 添加购物车结果
+#define PAD_NOTIFY_ADD_TO_CART_IN_DETAIL        @"PAD_NOTIFY_ADD_TO_CART_IN_DETAIL" // 商品详情添加购物车通知
+#define PAD_NOTIFY_ADD_TO_FAV_IN_DETAIL         @"PAD_NOTIFY_ADD_TO_FAV_IN_DETAIL"  // 商品详情添加收藏通知
+#define PAD_NOTIFY_VIEW_DETAIL_IN_DETAIL        @"PAD_NOTIFY_VIEW_DETAIL_IN_DETAIL" // 商品详情查看商品详情
+#define PAD_NOTIFY_SWIPE_IN_DETAIL              @"PAD_NOTIFY_SWIPE_IN_DETAIL"       // 滑动手势
+#define PAD_NOTIFY_SHOW_TICKET_RULE             @"PAD_NOTIFY_SHOW_TICKET_RULE"      // 显示抵用券规则
+#define PAD_NOTIFY_PRODUCT_DETAIL_VC_DEALLOC    @"PAD_NOTIFY_PRODUCT_DETAIL_VC_DEALLOC"
+#define PAD_NOTIFY_CLOSE_DETAIL_IN_DETAIL       @"PAD_NOTIFY_CLOSE_DETAIL_IN_DETAIL" // 关闭详情中的详情页
+
+#define kNotifyCloseLoginVC @"kNotifyCloseLoginVC"
+
+#define OTSP_TRANS_DURATION  0.2f//页面转换渐变时间
+#define kLongPressTime  0.2//长按shijian
+
+#define  kLoginViewTag 141
+#define  kRealLoginViewTag 13100
+
+#define LOG_THE_METHORD    NSLog(@"'%@' called", NSStringFromSelector(_cmd));

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VariablesViewState
+   version = "1.0">
+   <ContextStates>
+      <ContextState
+         contextName = "-[MyFavorite startThread]:MyFavorite.m">
+      </ContextState>
+      <ContextState
+         contextName = "-[MyFavorite initFavoriteTableView]:MyFavorite.m">
+         <PersistentStrings>
+            <PersistentString
+               value = "self.view">
+            </PersistentString>
+            <PersistentString
+               value = "tableView">
+            </PersistentString>
+         </PersistentStrings>
+      </ContextState>
+      <ContextState
+         contextName = "-[HomePage showMainFrame]:HomePage.m">
+         <PersistentStrings>
+            <PersistentString
+               value = "[mainFrame viewWithTag:1000]">
+            </PersistentString>
+         </PersistentStrings>
+      </ContextState>
+      <ContextState
+         contextName = "-[OrderDetail setOrderDetailView]:OrderDetail.m">
+         <PersistentStrings>
+            <PersistentString
+               value = "lines">
+            </PersistentString>
+            <PersistentString
+               value = "count">
+            </PersistentString>
+         </PersistentStrings>
+      </ContextState>
+      <ContextState
+         contextName = "-[HomePage setLoginStatus]:HomePage.m">
+         <PersistentStrings>
+            <PersistentString
+               value = "pageView">
+            </PersistentString>
+            <PersistentString
+               value = "sequenceView">
+            </PersistentString>
+            <PersistentString
+               value = "mainFrame">
+            </PersistentString>
+         </PersistentStrings>
+      </ContextState>
+   </ContextStates>
+</VariablesViewState>

@@ -1,0 +1,35 @@
+iOS打包过程中需要注意的地方：
+
+1. 删除Settings.bundle(remove reference方式)
+2. 在Edit Scheme中，将Archive的Build Configuration设置为Release
+3. 在build Settings中，如下设置
+Architectures: Standard (armv7 armv7s)
+Valid Architectures: armv7 armv7s
+
+4.Code Signing Identity 设置为相应的distribution provision
+
+5.Preprocessor Macros中，将DEBUG宏删除
+
+6.注意检查接口版本号
+
+7.注意修改track id
+
+8.修改版本号，build号
+
+9.选择iOS Device作为target，clean一下工程，再build一次
+
+10.执行Product菜单的Archive
+
+11.Archive完成后，选中archive包，点击Distribute..按钮。
+接下来的画面中，如果是提交到store，选第一项，测试包和渠道包选第二项，并保存到本地。
+
+12. Archive包中包含dsym文件，注意保存好，以便今后debug使用
+
+13.版本发出之后，记得在svn中为当前发布版本新建一个branch
+
+
+快盘地址:www.kuaipan.cn
+快盘账号:xuyining@yihaodian.com
+密码:123321
+
+

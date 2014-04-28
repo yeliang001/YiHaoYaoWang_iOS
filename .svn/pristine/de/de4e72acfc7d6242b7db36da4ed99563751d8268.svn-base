@@ -1,0 +1,19 @@
+//
+//  ResultInfo.m
+//  TheStoreApp
+//
+//  Created by LinPan on 13-8-6.
+//
+//
+
+#import "ResultInfo.h"
+
+@implementation ResultInfo
+
+
+- (void)dealloc
+{
+//    [_responseCode release];
+    [super dealloc];
+}
+@end

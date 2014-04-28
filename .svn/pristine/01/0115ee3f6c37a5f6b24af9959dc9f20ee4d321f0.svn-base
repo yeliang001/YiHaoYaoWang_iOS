@@ -1,0 +1,110 @@
+//
+//  YWFavoriteService.m
+//  TheStoreApp
+//
+//  Created by LinPan on 13-8-17.
+//
+//
+
+#import "YWFavoriteService.h"
+#import "ResponseInfo.h"
+#import "FavoriteResultInfo.h"
+#import "FavoriteProductInfo.h"
+@implementation YWFavoriteService
+
+
+- (BOOL)addFavorite:(NSDictionary *)paramDic
+{
+    NSString * requestMethod = [NSString stringWithFormat:@"customer.addfav%@",[self convertParam2String:paramDic]];
+    ResponseInfo *response = [self startRequestWithMethod:requestMethod];
+    
+    if (response.isSuccessful && response.statusCode == 200)
+    {
+        NSDictionary *dataDic = response.data;
+        NSLog(@"customer.addfav %@",dataDic);
+        
+        NSString *result = dataDic[@"result"];
+        if ([result intValue] > 0)
+        {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+- (FavoriteResultInfo *)getMyFavoriteList:(NSDictionary *)paramDic
+{
+    NSString * requestMethod = [NSString stringWithFormat:@"customer.getfavlist%@",[self convertParam2String:paramDic]];
+    ResponseInfo *response = [self startRequestWithMethod:requestMethod];
+    
+    FavoriteResultInfo *resultInfo = [[FavoriteResultInfo alloc] init];
+    resultInfo.responseCode = response.statusCode;
+    resultInfo.bRequestStatus = response.isSuccessful;
+    resultInfo.responseDesc = response.desc;
+    
+    if (response.isSuccessful && response.statusCode == 200)
+    {
+        NSDictionary *dataDic = response.data;
+        NSLog(@"customer.getfavlist %@",dataDic);
+        
+        resultInfo.totalCount = [dataDic[@"recordcount"] intValue];
+        
+        NSMutableArray *favoriteList = [[NSMutableArray alloc] init];
+        NSArray *favoriteArr = dataDic[@"favorite_list"];
+        for (NSDictionary *dic in favoriteArr)
+        {
+            FavoriteProductInfo *favorite = [[FavoriteProductInfo alloc] init];
+            favorite.addTime = dic[@"addTime"];
+            favorite.catId = dic[@"catId"];
+            favorite.catalogId = dic[@"catalogId"];
+            favorite.favorCatId = dic[@"favorCatId"];
+            favorite.flag = dic[@"flag"];
+            favorite.goodsId = dic[@"goodsId"];
+            favorite.favoriteId = dic[@"id"];
+            favorite.newUserNote = dic[@"newUserNote"];
+            favorite.nowPrice = dic[@"nowPrice"];
+            favorite.oldUserNote = dic[@"oldUserNote"];
+            favorite.pid = dic[@"pid"];
+            favorite.popularity = dic[@"popularity"];
+            favorite.price = dic[@"price"];
+            favorite.productImgUrl = dic[@"productImgUrl"];
+            favorite.productName = dic[@"productName"];
+            favorite.siteId = dic[@"siteId"];
+            favorite.userId = dic[@"userId"];
+            favorite.userName = dic[@"userName"];
+            favorite.userNote = dic[@"userNote"];
+            favorite.userTagName = dic[@"userTagName"];
+            favorite.venderId = dic[@"venderId"];
+            favorite.venderName = dic[@"venderName"];
+            
+            [favoriteList addObject:favorite];
+            [favorite release];
+        }
+        
+        resultInfo.favoriteList = favoriteList;
+        [favoriteList release];
+    }
+    return resultInfo;
+}
+
+
+- (BOOL)delFavorite:(NSDictionary *)paramDic
+{
+    NSString * requestMethod = [NSString stringWithFormat:@"customer.delfav%@",[self convertParam2String:paramDic]];
+    ResponseInfo *response = [self startRequestWithMethod:requestMethod];
+    
+    if (response.isSuccessful && response.statusCode == 200)
+    {
+        NSDictionary *dataDic = response.data;
+        NSLog(@"customer.delfav %@",dataDic);
+        
+        NSString *result = dataDic[@"result"];
+        if ([result intValue] > 0)
+        {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+@end

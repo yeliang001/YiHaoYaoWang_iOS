@@ -1,0 +1,888 @@
+//
+//  OTSSecurityValidationVC.m
+//  TheStoreApp
+//
+//  Created by yiming dong on 12-6-12.
+//  Copyright (c) 2012年 __MyCompanyName__. All rights reserved.
+//
+
+#import "OTSSecurityValidationVC.h"
+#import <QuartzCore/QuartzCore.h>
+#import "OTSUtil.h"
+#import "OTSNaviAnimation.h"
+#import "OTSTimedSendButton.h"
+#import "OTSSecurityValidateService.h"
+#import "NeedCheckResult.h"
+#import "OTSLoadingView.h"
+#import "SendValidCodeResult.h"
+#import "CheckSmsResult.h"
+#import "OTSHilightedTextField.h"
+#import "AccountBalance.h"
+
+
+#define SEC_VAL_VIEW_MARGIN         8
+#define PORTRAIT_KEYBOARD_HEIGHT    216
+#define OTS_SV_TAG_SCROLL_VIEW      OTS_MAGIC_TAG_NUMBER
+
+#define OTS_STR_PHONE_NUM_TIP           @"为了您的账户安全，系统会发送验证码到您的手机"
+#define OTS_STR_VALIDATE_CODE_TIP       @"请将手机上收到的验证码，在30分钟内填入验证码输入框"
+
+#define OTS_STR_PHONE_EMPTY                 @"手机号码不能为空，请输入"
+#define OTS_STR_CODE_EMPTY                  @"验证码不能为空，请输入"
+
+#define DEFAULT_KEY_SECURITY_VALITATION_CODE    @"default_key_security_valitation_code"
+#define VALIDATE_CODE_LENGTH                 6
+
+static CGFloat normalKeyboardHeight = PORTRAIT_KEYBOARD_HEIGHT;
+
+@interface OTSSecurityValidationVC ()
+-(void)goLayout;
+-(void)threadDoAction:(id)aActionTypeObj;
+-(void)threadDoAction:(id)aActionTypeObj message:(NSString*)aMessage;
+-(void)naviToCaller;
+@property(nonatomic, retain)UIView* validationSecView;
+@end
+
+@implementation OTSSecurityValidationVC
+@synthesize validationSecView;
+
+#pragma mark - 验证
++(NSString*)validateCode
+{
+   return [[NSUserDefaults standardUserDefaults] stringForKey:DEFAULT_KEY_SECURITY_VALITATION_CODE];
+}
+
+
+-(BOOL)validatePhoneNumField
+{
+    BOOL passed = NO;
+    
+    if (phoneNumFd.text == nil || [phoneNumFd.text length] <= 0)
+    {
+        phoneWarningLbl.text = OTS_STR_PHONE_EMPTY;
+        phoneWarningLbl.hidden = NO;
+        [self goLayout];
+    }
+    else if ([phoneNumFd.text length] != 11)
+    {
+        phoneWarningLbl.text = [NSString stringWithFormat:@"请输入11位号码，您输入了%d位", [phoneNumFd.text length]];
+        phoneWarningLbl.hidden = NO;
+        [self goLayout];
+    }
+    else
+    {
+        phoneWarningLbl.text = @"";
+        passed = YES;
+    }
+    
+    return passed;
+}
+
+-(BOOL)validateCodeField
+{
+    BOOL passed = NO;
+    
+    if (validationNumFd.text == nil || [validationNumFd.text length] <= 0)
+    {
+        validationWarningLbl.text = OTS_STR_CODE_EMPTY;
+        validationWarningLbl.hidden = NO;
+        [self goLayout];
+    }
+    else if ([validationNumFd.text length] != VALIDATE_CODE_LENGTH)
+    {
+        validationWarningLbl.text = [NSString stringWithFormat:@"请输入%d位验证码，您输入了%d位"
+                                     , VALIDATE_CODE_LENGTH
+                                     , [validationNumFd.text length]];
+        validationWarningLbl.hidden = NO;
+        [self goLayout];
+    }
+    else
+    {
+        validationWarningLbl.text = @"";
+        passed = YES;
+    }
+    
+    return passed;
+}
+
+
+#pragma mark - 动作
+// 退出画面，返回之前的界面
+-(void)naviBackAnimated:(BOOL)aIsAnimated
+{
+    if (aIsAnimated)
+    {
+        [self.view.superview.layer addAnimation:[OTSNaviAnimation animationPushFromLeft] forKey:@"Reveal"];
+    }
+    
+    [self removeSelf];
+}
+-(void)backToSendCodeView{
+    [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromLeft] forKey:@"Reveal"];
+    [validationSecView removeFromSuperview];
+    validationSecView = nil;
+}
+
+-(void)navigateBackAction
+{
+	[self naviBackAnimated:YES];
+}
+
+-(void)resignTextFieldAction
+{
+    [phoneNumFd resignFirstResponder];
+   // [validationNumFd resignFirstResponder];
+    [scrollView setContentOffset:CGPointZero animated:YES];
+}
+
+-(void)finishAction
+{
+    [self resignTextFieldAction];
+    
+    BOOL phoneNumberOK = [self validatePhoneNumField];
+    BOOL codeOK = [self validateCodeField];
+    
+    if (phoneNumberOK && codeOK)
+    {
+        [self threadDoAction:[NSNumber numberWithInt:KOTSSecurityValidationActionCheckCode]];
+    }
+}
+
+-(id)requestCodeAction
+{
+    [self resignTextFieldAction];
+    BOOL validateSuccess = [self validatePhoneNumField];
+    
+    if (validateSuccess)
+    {
+        
+       // [self threadDoAction:[NSNumber numberWithInt:KOTSSecurityValidationActionSendCode]];
+        [self threadDoAction:[NSNumber numberWithInt:KOTSSecurityValidationActionSendCode] message:@"正在获取验证码"];
+    }
+    return [NSNumber numberWithBool:validateSuccess];
+}
+
+
+
+
+-(UIImageView*)warningCrossView
+{
+    UIImageView* warningCrossView = [[[UIImageView alloc] initWithImage:[UIImage imageNamed:@"sec_val_warning_cross"]] autorelease];
+    CGRect warningCrossRect = warningCrossView.frame;
+    warningCrossRect.origin.x = - warningCrossView.image.size.width - 5;
+    warningCrossRect.origin.y = 5;
+    warningCrossView.frame = warningCrossRect;
+    
+    return warningCrossView;
+}
+
+// 安装子视图
+-(UIView*)assembleRootView
+{
+    CGRect screenRect = [UIScreen mainScreen].bounds;
+    
+    UIView* rootView = [[[UIView alloc] initWithFrame:self.view.bounds] autorelease];
+    rootView.backgroundColor = [UIColor whiteColor];
+    
+    
+    // 导航条背景
+    UIImage* naviBarImage = [UIImage imageNamed:@"title_bg.png"];
+    UIImageView* naviBgImageView = [[[UIImageView alloc] initWithImage:naviBarImage] autorelease];
+    CGRect naviRect = naviBgImageView.frame;
+    naviRect.size.height = NAVIGATION_BAR_HEIGHT;
+    naviRect.size.width = screenRect.size.width;
+    naviBgImageView.frame = naviRect;
+    [rootView addSubview:naviBgImageView];  //---->>>
+    
+    // 导航条文字
+    UILabel* naviTitle = [[[UILabel alloc] initWithFrame:naviBgImageView.bounds] autorelease];
+    NSString* titleText = isBond ? @"安全验证" : @"手机绑定";
+    naviTitle.text = titleText;
+    naviTitle.textAlignment = UITextAlignmentCenter;
+    naviTitle.textColor = [UIColor whiteColor];
+    naviTitle.backgroundColor = [UIColor clearColor];
+    naviTitle.font = [UIFont boldSystemFontOfSize:20.f];
+    naviTitle.shadowColor = [UIColor blackColor];
+    naviTitle.shadowOffset = CGSizeMake(1, -1);
+    //[OTSUtil setShadowForView:naviTitle];
+    [rootView addSubview:naviTitle];    //---->>>
+    
+    // 导航条左侧按钮
+    UIImage* leftNaviBtnImage = [[UIImage imageNamed:@"title_left_cancel.png"] stretchableImageWithLeftCapWidth:4.0 topCapHeight:4.];//[UIImage imageNamed:@"title_right_btn.png"];
+    UIImage* leftNaviBtnSelImage = [[UIImage imageNamed:@"title_left_cancel_sel.png"] stretchableImageWithLeftCapWidth:4.0 topCapHeight:4.];
+    
+    UIButton* leftNaviBtn = [OTSUtil buttonWithTitle:@"" 
+                                                       rect:CGRectMake(NAVIGATION_BTN_MARGIN_X, NAVIGATION_BTN_MARGIN_Y, NAVIGATION_BTN_WIDTH, NAVIGATION_BTN_HEIGHT) 
+                                                   bgNormal:leftNaviBtnImage 
+                                             bgHightlighted:leftNaviBtnSelImage 
+                                                     target:self
+                                                   selector:@selector(navigateBackAction) 
+                                                titleShadow:YES];
+    [rootView addSubview:leftNaviBtn];  //---->>>
+    
+    
+    //scrollView
+    int upperY = CGRectGetMaxY(naviTitle.frame);
+    CGRect scrollRect = CGRectMake(0, upperY, screenRect.size.width, screenRect.size.height - upperY);
+    scrollView = [[[UIScrollView alloc] initWithFrame:scrollRect] autorelease];
+    scrollView.backgroundColor = [UIColor clearColor];
+    [scrollView setDelegate:self];
+    [scrollView setAlwaysBounceVertical:YES];
+    [rootView addSubview:scrollView];   //---->>>
+    scrollView.tag = OTS_SV_TAG_SCROLL_VIEW;
+    
+    
+    //-------------------- 1st section begin ---------------------
+    //phone number tip
+    CGRect phoneTipRect = CGRectMake(SEC_VAL_VIEW_MARGIN
+                                     , SEC_VAL_VIEW_MARGIN
+                                     , screenRect.size.width - SEC_VAL_VIEW_MARGIN * 2
+                                     , 40);
+    UILabel* phoneTipLbl = [OTSUtil labelWithTitle:OTS_STR_PHONE_NUM_TIP rect:phoneTipRect font:[UIFont boldSystemFontOfSize:16.f] color:[UIColor blackColor]];
+    phoneTipLbl.numberOfLines = 2;
+    phoneTipLbl.textAlignment = UITextAlignmentLeft;
+    [scrollView addSubview:phoneTipLbl]; //---->>>
+    
+    
+    //round corner background view
+    
+    CGRect roundCornderBgRect = CGRectMake(SEC_VAL_VIEW_MARGIN
+                                           , CGRectGetMaxY(phoneTipRect) + 10
+                                           , screenRect.size.width - SEC_VAL_VIEW_MARGIN * 2
+                                           , 45);
+    roundCornerBgView = [[[UIButton alloc] initWithFrame:roundCornderBgRect] autorelease];
+    [roundCornerBgView addTarget:self action:@selector(resignTextFieldAction) forControlEvents:UIControlEventTouchUpInside];
+    roundCornerBgView.backgroundColor = [UIColor whiteColor];
+    roundCornerBgView.layer.cornerRadius = 8;
+    roundCornerBgView.layer.borderColor = OTS_LIGHT_GRAY.CGColor;
+    roundCornerBgView.layer.borderWidth = 1.5f;
+    [scrollView addSubview:roundCornerBgView];  //---->>>
+    
+    // 手机号：
+    CGRect phoneNumRect = CGRectMake(SEC_VAL_VIEW_MARGIN
+                                     , SEC_VAL_VIEW_MARGIN
+                                     , 65
+                                     , 30);
+    UILabel* phoneNumLbl = [OTSUtil labelWithTitle:@"手机号：" rect:phoneNumRect font:[UIFont boldSystemFontOfSize:16.f] color:[UIColor blackColor]];
+    
+    [roundCornerBgView addSubview:phoneNumLbl]; //---->>>
+    
+    // --------------------------手机号输入框-------------------------------
+    CGRect phoneNumFdRect = CGRectMake(CGRectGetMaxX(phoneNumRect)
+                                     , SEC_VAL_VIEW_MARGIN
+                                     , 160
+                                     , 30);
+    
+   // phoneNumFd = [[[OTSHilightedTextField alloc] initWithFrame:phoneNumFdRect placeholder:@"请输入手机号码"] autorelease];
+    phoneNumFd = [[[UITextField alloc]initWithFrame:phoneNumFdRect]autorelease];
+    [phoneNumFd setPlaceholder:@"请输入手机号码"];
+    [phoneNumFd setFont:[UIFont systemFontOfSize:15.0f]];
+    phoneNumFd.keyboardType = UIKeyboardTypeNumberPad;
+    phoneNumFd.borderStyle = UITextBorderStyleNone;
+    phoneNumFd.backgroundColor = [UIColor clearColor];
+    phoneNumFd.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
+    phoneNumFd.clearButtonMode = UITextFieldViewModeWhileEditing;
+    phoneNumFd.font = [UIFont systemFontOfSize:15.f];
+    phoneNumFd.textColor = [UIColor darkGrayColor];
+    phoneNumFd.clipsToBounds = NO;
+    phoneNumFd.delegate = self;
+    if (userPhoneNumber)
+    {
+        phoneNumFd.text = userPhoneNumber;
+    }
+    [phoneNumFd setBorderStyle:UITextBorderStyleNone];
+    [roundCornerBgView addSubview:phoneNumFd];  //---->>>
+    
+    // 绑定状态
+    CGRect isPhoneBoundRect = CGRectMake(CGRectGetMaxX(phoneNumFdRect)
+                                     , SEC_VAL_VIEW_MARGIN
+                                     , 65
+                                     , 30);
+    isPhoneBoundLbl = [OTSUtil labelWithTitle:@"已绑定" rect:isPhoneBoundRect font:[UIFont boldSystemFontOfSize:16.f] color:[UIColor darkGrayColor]];
+    
+    if (isBond)
+    {
+        isPhoneBoundLbl.text = @"已绑定";
+        phoneNumFd.enabled = NO;
+    }
+    else
+    {
+        isPhoneBoundLbl.text = @"未绑定";
+    }
+    
+    [roundCornerBgView addSubview:isPhoneBoundLbl]; //---->>>
+    
+    // ------------------------手机号错误提示---------------------------
+    CGRect phoneWarningRect = CGRectMake(roundCornderBgRect.origin.x+30
+                                         , CGRectGetMaxY(roundCornderBgRect)
+                                         , screenRect.size.width - phoneNumFdRect.origin.x
+                                         , 32);
+    phoneWarningLbl = [OTSUtil labelWithTitle:OTS_STR_PHONE_EMPTY rect:phoneWarningRect font:[UIFont boldSystemFontOfSize:14.f] color:OTS_COLOR_FROM_RGB(0xCC0000)];
+    phoneWarningLbl.textAlignment = UITextAlignmentLeft;
+    phoneWarningLbl.numberOfLines = 0;
+    phoneWarningLbl.clipsToBounds = NO;
+    [phoneWarningLbl setHidden:YES];
+    
+    [scrollView addSubview:phoneWarningLbl]; //---->>>
+    
+    [phoneWarningLbl addSubview:[self warningCrossView]];
+    
+    // ----------------------------发送按钮-------------------------------------
+    //int offsetY = phoneWarningLbl.hidden ? 8 : phoneWarningLbl.frame.size.height;
+    CGRect requestCodeRect = CGRectMake(roundCornderBgRect.origin.x+20
+                                         , phoneWarningRect.origin.y+10
+                                         , 264
+                                         , 38);
+    
+    requestCodeBtn = [[[OTSTimedSendButton alloc] initWithFrame:requestCodeRect
+                                                                         taget:self 
+                                                       selector:@selector(requestCodeAction)] autorelease];
+
+    [scrollView addSubview:requestCodeBtn];  //---->>>
+    
+    CGRect tipsRect = CGRectMake(10,
+                                  scrollRect.size.height - 120,
+                                  300,
+                                  80);
+    UILabel* tipsLabel = [[UILabel alloc]initWithFrame:tipsRect];
+    [tipsLabel setFont:[UIFont systemFontOfSize:13.0]];
+    [tipsLabel setBackgroundColor:OTS_VERY_LIGHT_GRAY];
+    [tipsLabel setNumberOfLines:0];
+    [tipsLabel setText:@"   绑定手机不收任何费用，一个手机号码只能绑定\n   一个账号，若需修改或解除已绑定的手机，请联\n   系1号店客服"];
+    [scrollView addSubview:tipsLabel];
+    [tipsLabel release];
+    // 完成组装，返回root view
+    return rootView;
+}
+-(void)enterVerificationView{
+    CGRect screenRect = [UIScreen mainScreen].bounds;
+    
+    validationSecView = [[[UIView alloc] initWithFrame:self.view.bounds] autorelease];
+    validationSecView.backgroundColor = [UIColor whiteColor];
+    
+    
+    // 导航条背景
+    UIImage* naviBarImage = [UIImage imageNamed:@"title_bg.png"];
+    UIImageView* naviBgImageView = [[[UIImageView alloc] initWithImage:naviBarImage] autorelease];
+    CGRect naviRect = naviBgImageView.frame;
+    naviRect.size.height = NAVIGATION_BAR_HEIGHT;
+    naviRect.size.width = screenRect.size.width;
+    naviBgImageView.frame = naviRect;
+    [validationSecView addSubview:naviBgImageView];  //---->>>
+    
+    // 导航条文字
+    UILabel* naviTitle = [[[UILabel alloc] initWithFrame:naviBgImageView.bounds] autorelease];
+    naviTitle.text = @"提交验证码";
+    naviTitle.textAlignment = UITextAlignmentCenter;
+    naviTitle.textColor = [UIColor whiteColor];
+    naviTitle.backgroundColor = [UIColor clearColor];
+    naviTitle.font = [UIFont boldSystemFontOfSize:20.f];
+    naviTitle.shadowColor = [UIColor blackColor];
+    naviTitle.shadowOffset = CGSizeMake(1, -1);
+    //[OTSUtil setShadowForView:naviTitle];
+    [validationSecView addSubview:naviTitle];    //---->>>
+    
+    // 导航条左侧按钮
+    UIImage* leftNaviBtnImage = [[UIImage imageNamed:@"title_left_cancel.png"] stretchableImageWithLeftCapWidth:4.0 topCapHeight:4.];//[UIImage imageNamed:@"title_right_btn.png"];
+    UIImage* leftNaviBtnSelImage = [[UIImage imageNamed:@"title_left_cancel_sel.png"] stretchableImageWithLeftCapWidth:4.0 topCapHeight:4.];
+    
+    UIButton* leftNaviBtn = [OTSUtil buttonWithTitle:@""
+                                                rect:CGRectMake(NAVIGATION_BTN_MARGIN_X, NAVIGATION_BTN_MARGIN_Y, NAVIGATION_BTN_WIDTH, NAVIGATION_BTN_HEIGHT)
+                                            bgNormal:leftNaviBtnImage
+                                      bgHightlighted:leftNaviBtnSelImage
+                                              target:self
+                                            selector:@selector(backToSendCodeView)
+                                         titleShadow:YES];
+    [validationSecView addSubview:leftNaviBtn];  //---->>>
+    
+    
+    
+    
+    UIScrollView* scrollBg = [[[UIScrollView alloc]initWithFrame:CGRectMake(0, NAVIGATION_BAR_HEIGHT, ApplicationWidth, ApplicationHeight-NAVIGATION_BAR_HEIGHT)]autorelease];
+    [scrollBg setAlwaysBounceVertical:YES];
+    [scrollBg setDelegate:self];
+    
+    CGRect validationTipRect = CGRectMake(SEC_VAL_VIEW_MARGIN
+                                          , SEC_VAL_VIEW_MARGIN
+                                          , screenRect.size.width - SEC_VAL_VIEW_MARGIN * 2
+                                          , 21);
+    validationTipLbl = [OTSUtil labelWithTitle:[NSString stringWithFormat:@"手机号：%@",phoneNumFd.text] rect:validationTipRect font:[UIFont systemFontOfSize:16.f] color:[UIColor blackColor]];
+    validationTipLbl.numberOfLines = 2;
+    validationTipLbl.textAlignment = UITextAlignmentLeft;
+    [scrollBg addSubview:validationTipLbl]; //---->>>
+    
+    
+    CGRect roundCornderBgRect = CGRectMake(SEC_VAL_VIEW_MARGIN
+                                           , CGRectGetMaxY(validationTipRect) + 10
+                                           , screenRect.size.width - SEC_VAL_VIEW_MARGIN * 2
+                                           , 45);
+    UIButton* roundBgView = [[[UIButton alloc] initWithFrame:roundCornderBgRect] autorelease];
+    [roundBgView addTarget:self action:@selector(resignTextFieldAction) forControlEvents:UIControlEventTouchUpInside];
+    roundBgView.backgroundColor = [UIColor whiteColor];
+    roundBgView.layer.cornerRadius = 8;
+    roundBgView.layer.borderColor = OTS_LIGHT_GRAY.CGColor;
+    roundBgView.layer.borderWidth = 1.5f;
+    [scrollBg addSubview:roundBgView];
+    // 验证码：
+    CGRect validateNumRect = CGRectMake(SEC_VAL_VIEW_MARGIN
+                                        , SEC_VAL_VIEW_MARGIN
+                                        , 65
+                                        , 30);
+    validateNumLbl = [OTSUtil labelWithTitle:@"验证码：" rect:validateNumRect font:[UIFont systemFontOfSize:16.f] color:[UIColor blackColor]];
+    
+    [roundBgView addSubview:validateNumLbl]; //---->>>
+    
+    // ---------------------验证码输入框------------------------------------
+    CGRect validationNumFdRect = CGRectMake(CGRectGetMaxX(validateNumRect)
+                                            , validateNumRect.origin.y
+                                            , 220
+                                            , 30);
+    
+    //validationNumFd = [[[OTSHilightedTextField alloc] initWithFrame:validationNumFdRect placeholder:@"请输入验证码"] autorelease];
+    
+    validationNumFd = [[[UITextField alloc]initWithFrame:validationNumFdRect]autorelease];
+    [validationNumFd setPlaceholder:@"请输入验证码"];
+    [validationNumFd setFont:[UIFont systemFontOfSize:15.0f]];
+    validationNumFd.keyboardType = UIKeyboardTypeNumberPad;
+    validationNumFd.borderStyle = UITextBorderStyleNone;
+    validationNumFd.backgroundColor = [UIColor clearColor];
+    validationNumFd.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
+    validationNumFd.clearButtonMode = UITextFieldViewModeWhileEditing;
+    validationNumFd.font = [UIFont systemFontOfSize:15.f];
+    validationNumFd.textColor = [UIColor darkGrayColor];
+    validationNumFd.clipsToBounds = NO;
+    validationNumFd.delegate = self;
+    [roundBgView addSubview:validationNumFd];  //---->>>
+    
+    
+    // --------------------验证码错误提示--------------------------
+    CGRect validationWarningRect = CGRectMake(roundCornderBgRect.origin.x+30
+                                              , CGRectGetMaxY(roundCornderBgRect)+8
+                                              , screenRect.size.width - validationNumFdRect.origin.x
+                                              , 32);
+    validationWarningLbl = [OTSUtil labelWithTitle:OTS_STR_CODE_EMPTY rect:validationWarningRect font:[UIFont boldSystemFontOfSize:14.f] color:OTS_COLOR_FROM_RGB(0xCC0000)];
+    validationWarningLbl.textAlignment = UITextAlignmentLeft;
+    validationWarningLbl.clipsToBounds = NO;
+    validationWarningLbl.numberOfLines = 0;
+    validationWarningLbl.hidden = YES;
+    
+    [scrollBg addSubview:validationWarningLbl]; //---->>>
+    
+    [validationWarningLbl addSubview:[self warningCrossView]];
+    
+    
+    // 底部发送按钮
+    UIImage* finishImageNormal = [[UIImage imageNamed:@"orange_btn"]stretchableImageWithLeftCapWidth:10.0 topCapHeight:10];
+    CGRect finishRect = CGRectMake(30
+                                   , CGRectGetMaxY(roundCornderBgRect)+15
+                                   ,  120, 40);
+    
+    //NSString* finisheBtnStr = isBond ? @"完成" : @"完成并绑定手机号";
+    finishBtn = [OTSUtil buttonWithTitle:@"提交验证码"
+                                    rect:finishRect
+                                bgNormal:finishImageNormal
+                          bgHightlighted:nil
+                                  target:self
+                                selector:@selector(finishAction)
+                             titleShadow:NO];
+    finishBtn.titleLabel.font = [UIFont boldSystemFontOfSize:18.f];
+    [scrollBg addSubview:finishBtn];  //---->>>
+    
+    CGRect timerBtnRect = CGRectMake(CGRectGetMaxX(finishRect)+20
+                                     , CGRectGetMaxY(roundCornderBgRect)+15
+                                     ,  120, 40);
+    secondTimerBtn = [[[OTSTimedSendButton alloc] initWithFrameType2:timerBtnRect
+                                                                                   taget:self
+                                                                                selector:@selector(requestCodeAction)] autorelease];
+    [scrollBg addSubview:secondTimerBtn];
+    [secondTimerBtn startTimerWithOutDoAction];
+    
+    CGRect tipsRect = CGRectMake(10,
+                                 scrollBg.frame.size.height - 100,
+                                 300,
+                                 80);
+    UILabel* tipsLabel = [[UILabel alloc]initWithFrame:tipsRect];
+    [tipsLabel setFont:[UIFont systemFontOfSize:13.0]];
+    [tipsLabel setBackgroundColor:OTS_VERY_LIGHT_GRAY];
+    [tipsLabel setNumberOfLines:0];
+    [tipsLabel setText:@"   绑定手机不收任何费用，一个手机号码只能绑定\n   一个账号，若需修改或解除已绑定的手机，请联\n   系1号店客服"];
+    [scrollBg addSubview:tipsLabel];
+    [tipsLabel release];
+    
+    [validationSecView addSubview:scrollBg];
+    
+    [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+    [self.view addSubview:validationSecView];
+}
+
+-(void)goLayout
+{
+    if (validationSecView.superview == nil) {
+        int baseLineY;
+        if (phoneWarningLbl.hidden == YES && phoneWarningLbl.text == @"") {
+            baseLineY = CGRectGetMaxY(phoneWarningLbl.frame);
+        }else{
+            baseLineY = CGRectGetMaxY(phoneWarningLbl.frame) + 8;
+        }
+//        int baseLineY = CGRectGetMaxY(phoneWarningLbl.frame) + 8;
+        CGRect rc = requestCodeBtn.frame;
+        rc.origin.y = baseLineY;
+        [requestCodeBtn setFrame:rc];
+    }else{
+        int baseLineY;
+        if (validationWarningLbl.hidden == YES && validationWarningLbl.text == @"") {
+            baseLineY = CGRectGetMaxY(validationWarningLbl.frame);
+        }else{
+            baseLineY = CGRectGetMaxY(validationWarningLbl.frame) + 8;
+        }
+//        int baseLineY = CGRectGetMaxY(validationWarningLbl.frame) + 8;
+        CGRect rc1 = finishBtn.frame;
+        rc1.origin.y = baseLineY;
+        CGRect rc2 = secondTimerBtn.frame;
+        rc2.origin.y = baseLineY;
+        [finishBtn setFrame:rc1];
+        [secondTimerBtn setFrame:rc2];
+    }
+    
+}
+
+#pragma mark - text field delegate
+
+- (void)textFieldDidBeginEditing:(UITextField *)textField
+{
+    if (textField == phoneNumFd)
+    {
+        [scrollView setContentOffset:CGPointZero animated:YES];
+    }
+//    else if (textField == validationNumFd)
+//    {
+//        int offset = CGRectGetMaxY(finishBtn.frame) - normalKeyboardHeight + 20;
+//        [scrollView setContentOffset:CGPointMake(0, offset) animated:YES];
+//    }
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField *)textField
+{
+    if (textField == phoneNumFd)
+    {
+        [self validatePhoneNumField];
+        //phoneWarningLbl.hidden = [phoneNumFd.text length] > 0;
+    }
+    else if (textField == validationNumFd)
+    {
+        [self validateCodeField];
+        //validationWarningLbl.hidden = [validationNumFd.text length] > 0;
+    }
+    
+    [textField resignFirstResponder];
+    [scrollView setContentOffset:CGPointZero animated:YES];
+    
+    //[self goLayout];
+    
+    return YES;
+}
+
+- (BOOL)textField:(UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string
+{
+    NSInteger changedLength = [string length];
+    
+    if (textField == phoneNumFd && [phoneNumFd.text length] >= 11 && changedLength)
+    {
+        return NO;
+    }
+    else if (textField == validationNumFd && [validationNumFd.text length] >= VALIDATE_CODE_LENGTH && changedLength)
+    {
+        return NO;
+    }
+    
+    return YES;
+}
+- (void)scrollViewDidScroll:(UIScrollView *)aScrollView{
+    if (aScrollView != scrollView) {
+        [validationNumFd resignFirstResponder];
+    }else{
+        [phoneNumFd resignFirstResponder];
+    }
+}
+#pragma mark - View lifecycle
+-(void)viewWillAppear:(BOOL)animated
+{
+    isShowingMe = YES;
+}
+
+-(void)viewWillDisappear:(BOOL)animated
+{
+    isShowingMe = NO;
+}
+
+
+- (void)viewDidLoad
+{
+    self.isFullScreen = YES;
+    [super viewDidLoad];
+    
+    self.view = [self assembleRootView];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleKeyboardDidShow:) name:UIKeyboardDidShowNotification object:nil];  
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleKeyboardWillHide:) name:UIKeyboardWillHideNotification object:nil];
+    
+    service = [[OTSSecurityValidateService alloc] init];
+}
+
+
+#pragma mark - keyboard notify
+
+- (void)handleKeyboardWillHide:(NSNotification *)notification 
+{
+    if (!isShowingMe) 
+    {
+        return;
+    }
+    
+    if (doneInKeyboardButton.superview) 
+    {
+        [doneInKeyboardButton removeFromSuperview];
+    }
+    
+}
+
+- (void)handleKeyboardDidShow:(NSNotification *)notification  
+{  
+    if (!isShowingMe) 
+    {
+        return;
+    }
+    
+    NSDictionary *info = [notification userInfo];  
+    CGSize kbSize = [[info objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue].size;  
+    normalKeyboardHeight = kbSize.height;
+    
+    
+    // create custom button
+    if (doneInKeyboardButton == nil) 
+    {
+        doneInKeyboardButton = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+        
+        doneInKeyboardButton.frame = CGRectMake(0, ScreenHeight - 53, 106, 53);
+        //IF_IOS5_OR_GREATER(doneButton.frame = CGRectMake(-310, -43, 106, 53);)
+        
+        doneInKeyboardButton.adjustsImageWhenHighlighted = NO;
+        [doneInKeyboardButton setImage:[UIImage imageNamed:@"numPadDoneUp.png"] forState:UIControlStateNormal];
+        [doneInKeyboardButton setImage:[UIImage imageNamed:@"numPadDoneDown.png"] forState:UIControlStateHighlighted];
+        [doneInKeyboardButton addTarget:self action:@selector(finishAction) forControlEvents:UIControlEventTouchUpInside];
+    }
+    
+    // locate keyboard view
+    UIWindow* tempWindow = [[[UIApplication sharedApplication] windows] objectAtIndex:1];
+    
+    
+    
+    if (doneInKeyboardButton.superview == nil) 
+    {
+        [tempWindow addSubview:doneInKeyboardButton];
+    }
+}  
+
+#pragma mark - 内存
+-(id)initWithNeedCheckResult:(NeedCheckResult*)aNeedCheckResult 
+                notifyTarget:(id)aNotifyTarget 
+                notifyAction:(SEL)aNotifyAction
+//                  callerType:(EOTSSecurityValidationCallerType)aCallerType 
+//                callerObject:(id)aCallerObject
+{
+    if (aNeedCheckResult == nil) 
+    {
+        return nil;
+    }
+    
+    self = [super init];
+    if (self)
+    {
+        isBond = ([aNeedCheckResult.resultCode intValue] == 2);
+        
+        if (aNeedCheckResult.mobile && [aNeedCheckResult.mobile length] > 0)
+        {
+            userPhoneNumber = [aNeedCheckResult.mobile copy];
+        }
+        
+//        callerType = aCallerType;
+//        callerObject = [aCallerObject retain];
+        notifyTarget = aNotifyTarget;
+        notifyAction = aNotifyAction;
+    }
+    
+    return self;
+}
+
+-(void)dealloc
+{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    
+    [service release];
+    [phoneWarnAffectViews release];
+    [doneInKeyboardButton release];
+    [userPhoneNumber release];
+    [accountBalance release];
+    
+    [super dealloc];
+}
+
+#pragma mark - 线程操作
+
+-(void)threadDoAction:(id)aActionTypeObj message:(NSString*)aMessage
+{
+    // 开线程
+    //    [self otsDetatchMemorySafeNewThreadSelector:@selector(threadFunction:) 
+    //                             toTarget:self 
+    //                           withObject:aActionTypeObj];
+    
+    [self otsDetatchMemorySafeNewThreadSelector:@selector(threadFunction:) 
+                                       toTarget:self 
+                                     withObject:aActionTypeObj];
+    
+    [[OTSGlobalLoadingView sharedInstance] showInView:self.view title:aMessage];
+    
+}
+
+-(void)threadDoAction:(id)aActionTypeObj
+{
+    [self threadDoAction:aActionTypeObj message:nil];
+}
+
+
+
+// 线程函数
+-(void)threadFunction:(id)aActionTypeObj
+{
+    int actionType = [aActionTypeObj intValue];
+    
+    switch (actionType)
+    {
+        case KOTSSecurityValidationActionSendCode:
+        {
+            [service requestSendValidateCodeToPhone:phoneNumFd.text];
+        }
+            break;
+            
+        case KOTSSecurityValidationActionCheckCode:
+        {
+            [service requestCheckValidateCode:validationNumFd.text];
+        }
+            break;
+            
+        default:
+            break;
+    }
+    
+    // 刷新UI
+    [self performSelectorOnMainThread:@selector(updateUIAfterAction:) withObject:aActionTypeObj waitUntilDone:YES];
+}
+
+#pragma mark - 更新UI
+
+-(void)updateUIAfterAction:(id)aActionTypeObj
+{
+    [[OTSGlobalLoadingView sharedInstance] hide];
+    
+    int actionType = [aActionTypeObj intValue];
+    
+    switch (actionType)
+    {
+        case KOTSSecurityValidationActionSendCode:
+        {
+            if (service.sendValidCodeResult && [service.sendValidCodeResult.resultCode intValue] == 1){
+            //if (0) {
+                //[OTSUtil alert:@"验证码发送成功"];
+                //[validationNumFd becomeFirstResponder];
+                if (validationSecView.superview == nil) {
+                    [self enterVerificationView];
+                    phoneWarningLbl.hidden = YES;
+                    phoneWarningLbl.text = @"";
+                }else{
+                    [secondTimerBtn startTimerWithOutDoAction];
+                    validationWarningLbl.hidden = YES;
+                    validationWarningLbl.text = @"";
+                }
+                [requestCodeBtn startTimerWithOutDoAction];
+            }
+            else
+            {
+                NSString* errorStr;
+                if (service.sendValidCodeResult && service.sendValidCodeResult.errorInfo) 
+                {
+                    //[OTSUtil alert:service.sendValidCodeResult.errorInfo title:@"验证码发送失败"];
+                    errorStr = service.sendValidCodeResult.errorInfo;
+                }
+                else
+                {
+                   //[OTSUtil alert:@"验证码发送失败"];
+                    errorStr = @"验证码发送失败";
+                }
+                if (validationSecView.superview == nil) {
+                    phoneWarningLbl.text = errorStr;
+                    phoneWarningLbl.hidden = NO;
+                }else{
+                    validationWarningLbl.text = errorStr;
+                    validationWarningLbl.hidden = NO;
+                }
+            }
+            [self goLayout];
+        }
+            break;
+            
+        case KOTSSecurityValidationActionCheckCode:
+        {
+            if (service.checkSmsResult && [service.checkSmsResult.resultCode intValue] == 1)
+            {
+                DebugLog(@"验证成功");
+                //[OTSUtil alert:@"验证成功"];
+                
+                // 本地化
+                [[NSUserDefaults standardUserDefaults] setObject:validationNumFd.text forKey:DEFAULT_KEY_SECURITY_VALITATION_CODE];
+                
+                // 导航
+                [self naviToCaller];
+                
+            }
+            else
+            {
+                DebugLog(@"验证失败");
+                if (service.checkSmsResult && service.checkSmsResult.errorInfo) 
+                {
+                    //[OTSUtil alert:service.checkSmsResult.errorInfo title:@"验证失败"];
+                    validationWarningLbl.text = service.checkSmsResult.errorInfo;
+                }
+                else
+                {
+                    //[OTSUtil alert:@"验证失败"];
+                    validationWarningLbl.text = @"验证失败";
+                    
+                }
+                [validationWarningLbl setHidden:NO];
+                [self goLayout];
+            }
+        }
+            break;
+            
+        default:
+            break;
+    }
+}
+
+#pragma mark - 导航到调用者视图
+-(void)naviToCaller
+{
+    //modify by hjm
+    [self.view.superview.superview.layer addAnimation:[OTSNaviAnimation animationPushFromLeft] forKey:@"Reveal"];
+    [self removeSelf];
+    if ([notifyTarget respondsToSelector:notifyAction])
+    {
+        [notifyTarget performSelector:notifyAction withObject:validationNumFd.text];
+    }
+    //end modify
+    
+}
+
+@end
+

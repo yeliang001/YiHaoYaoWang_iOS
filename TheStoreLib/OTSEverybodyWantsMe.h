@@ -1,0 +1,146 @@
+
+#import "NSObject+OTS.h"
+#import <QuartzCore/QuartzCore.h>
+
+// build time
+#define OTS_BUILD_TIME      @" " //@"201208031500"        // 格式 yyyymmddHHMM
+
+//developing macro for testing
+#define ITERATION_5_ORDER_FLOW_TEST     1
+#define USE_INTERFACE_V2_ITER_5
+
+// 常量
+#define NAVIGATION_BAR_HEIGHT       44.f
+#define NAVIGATION_BTN_MARGIN_X     0
+#define NAVIGATION_BTN_MARGIN_Y     0
+#define NAVIGATION_BTN_WIDTH        61.f
+#define NAVIGATION_BTN_HEIGHT       44.f
+
+#define TABBAR_HEIGHT   49.f
+
+
+// ===============通知================
+#define OTS_NOTIFY_ROCK_BUY_NOW             @"OTSNotifyRockBuyNow"              // 摇摇购立即购买
+#define OTS_NOTIFY_ROCK_PRODUCT_CHANGE      @"OTSNotifyRockBuyProductChange"    // 摇摇购产品切换
+#define OTS_NOTIFY_ROCK_PREV_PAGE           @"OTSNotifyRockBuyPrevPage"              // 摇摇购切换到上一页
+#define OTS_NOTIFY_ROCK_NEXT_PAGE           @"OTSNotifyRockBuyNextPage"              // 摇摇购切换到下一页
+// 购物车
+#define OTS_NOTIFY_CART_LOAD                @"cartload"
+#define OTS_NOTIFY_CART_ENTER               @"EnterCart"
+#define OTS_NOTIFY_CART_CHANGED             @"CartChanged"
+
+#define OTS_NOTIFY_PROVINCE_CHANGED             @"ProvinceChanged"
+#define OTS_NOTIFY_IMAGE_CACHE_RETRIEVED        @"OtsImageCacheRetrieved"
+
+#define OTS_VC_REMOVED                          @"OtsVcRemoved"                // vc管理中，vc被移除
+#define OTS_ENTER_ORDER_DETAIL                  @"ots_enter_order_detail"       // 进入订单详情
+#define OTS_USER_LOG_OUT                        @"OtsUserLogOut"                // 用户登出
+#define OTS_ONLINEPAY_BANK_CHANGED              @"Ots_Onlinepay_Bank_Changed"                // 网上支付选择银行
+#define OTS_NOTIFY_GOTO_CART_AND_REFRESH        @"ots_notify_goto_cart_and_refresh"
+// ===============通知================
+
+
+// 网龙appid
+#define OTS_NET_DRAGON_APP_ID               1028
+
+// color
+#define OTS_VERY_LIGHT_GRAY     [UIColor colorWithRed:240./255 green:240./255 blue:240./255 alpha:1]
+#define OTS_LIGHT_GRAY     [UIColor colorWithRed:200./255 green:200./255 blue:200./255 alpha:1]
+
+#define OTS_COLOR_FROM_RGB(rgbValue) \
+[UIColor colorWithRed:((float)(((rgbValue) & 0xFF0000) >> 16))/255.0 \
+green:((float)(((rgbValue) & 0xFF00) >> 8))/255.0 \
+blue:((float)((rgbValue) & 0xFF))/255.0 \
+alpha:1.0]
+
+// 方法定义
+//#define CURRENT_METHOD_NAME(_cmd) [NSStringFromSelector(_cmd) substringToIndex:[NSStringFromSelector(_cmd) rangeOfString:@":" options:NSLiteralSearch].location]
+
+#define CURRENT_METHOD_NAME(sel)    [OTSUtility getInterfaceNameFromSelector:(sel)]
+
+#define PROVINCE_ID [GlobalValue getGlobalValueInstance].provinceId
+#define TRADER [GlobalValue getGlobalValueInstance].trader
+
+// RELEASE AND SET NIL
+#define OTS_SAFE_RELEASE(_obj) if ((_obj)) {[(_obj) release]; (_obj) = nil;}
+
+// 其他
+#define OTS_MAGIC_TAG_NUMBER        201206
+#define OTS_VIEW_ANIM_KEY           @"Reveal"
+#define OTS_MONEY_STR_MORMAT        @"￥%.2f"
+#define OTS_DEFAULT_PRODUCT_IMG     @"defaultimg85.png"
+#define OTS_SERVICE_PHONE_NUMBER    @"400-007-0958"
+#define STR_BADGE_BIG_NUMBER        @"N"
+
+// 字符串
+#define OTS_SHAKE_BUY_INVITE_STR    @"我正在使用1号药店1起摇，原价%.2f元的%@摇摇价只要%.2f元。来帮我一起摇吧！http://goo.gl/mXO0g"
+
+//#define INIT_IF_NULL(TARGET) if([VAL isKindOfClass:[NSNull class]]) { TARGET = nil ;}
+#define SET_IF_NOT_NULL(TARGET, VAL) if(![VAL isKindOfClass:[NSNull class]]) { TARGET = VAL; }
+// DEBUG
+/////////////////////////////////LOG DEFINE BEGIN///////////////////////////////
+#ifdef DEBUG
+//#if defined (DEBUG) && !defined (BUILDING_LIBRARY)
+//#define DebugLog(...)
+#define DebugLog(fmt, ...) NSLog((@"%s [Line %d] " fmt), __PRETTY_FUNCTION__, __LINE__, ##__VA_ARGS__);
+#else
+#define DebugLog(...)
+#endif
+
+#define AlwaysLog(fmt, ...) NSLog((@"%s [Line %d] " fmt), __PRETTY_FUNCTION__, __LINE__, ##__VA_ARGS__);
+
+#ifdef DEBUG
+#define DebugAlertLog(fmt, ...)  { UIAlertView *alert = [[OTSAlertView alloc] initWithTitle:[NSString stringWithFormat:@"%s\n [Line %d] ", __PRETTY_FUNCTION__, __LINE__] message:[NSString stringWithFormat:fmt, ##__VA_ARGS__]  delegate:nil cancelButtonTitle:@"Ok" otherButtonTitles:nil]; [alert show]; }
+#else
+#define DebugAlertLog(...)
+#endif
+/////////////////////////////////LOG DEFINE END///////////////////////////////
+
+
+////////IOS VERSION////////
+#ifndef kCFCoreFoundationVersionNumber_iPhoneOS_4_0
+#define kCFCoreFoundationVersionNumber_iPhoneOS_4_0 550.32
+#endif
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 40000
+#define IF_IOS4_OR_GREATER(...) \
+if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iPhoneOS_4_0) \
+{ \
+__VA_ARGS__ \
+}
+#else
+#define IF_IOS4_OR_GREATER(...)
+#endif
+
+#define IF_PRE_IOS4(...)  \
+if (kCFCoreFoundationVersionNumber < kCFCoreFoundationVersionNumber_iPhoneOS_4_0)  \
+{ \
+__VA_ARGS__ \
+}
+
+#ifndef kCFCoreFoundationVersionNumber_iPhoneOS_5_0
+#define kCFCoreFoundationVersionNumber_iPhoneOS_5_0 674.0
+#endif
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 40000
+#define IF_IOS5_OR_GREATER(...) \
+if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iPhoneOS_5_0) \
+{ \
+__VA_ARGS__ \
+}
+#else
+#define IF_IOS5_OR_GREATER(...)
+#endif
+
+#define IF_PRE_IOS5(...)  \
+if (kCFCoreFoundationVersionNumber < kCFCoreFoundationVersionNumber_iPhoneOS_5_0)  \
+{ \
+__VA_ARGS__ \
+}
+////////IOS VERSION////////
+
+// 判断是否为IPAD
+#define ISIPADDEVICE (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad)
+
+//ios7
+#define ISIOS7 [[[UIDevice currentDevice] systemVersion] floatValue] >= 7
+
+

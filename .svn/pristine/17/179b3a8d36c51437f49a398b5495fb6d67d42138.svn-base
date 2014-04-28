@@ -1,0 +1,70 @@
+//-------------------- OrderVO中 orderStatus和orderStatusString的关系 --------------------------------
+
+if (orderType == 6) {
+   if (orderStatus != 4) {
+    if (orderStatus == 34) {
+     return "已取消";
+    } else {
+     return "待结算";
+    }
+
+   } else {
+    return "完成";
+   }
+  } else {
+   if (orderStatus == 3) {
+    return "待结算";
+   } else if (orderStatus == 4) {
+    return "待处理";
+   } else if (orderStatus == 36) {
+    return "待审核";
+   } else if (orderStatus == 24) {
+    return "已收货";
+   } else if (orderStatus == 20 || orderStatus == 25) {
+    return "已发货";
+   } else if (orderStatus == 12) {
+    return "待退货";
+   } else if (orderStatus == 13) {
+    return "待换货";
+   } else if (orderStatus == 28) {
+    return "换货中";
+   } else if (orderStatus == 14 || orderStatus == 26
+     || orderStatus == 31) {
+    return "退货中";
+   } else if (orderStatus == 27) {
+    return "已退货";
+   } else if (orderStatus == 33) {
+    return "已换货";
+   } else if (orderStatus == 35) {
+    return "已完成";
+   } else if (orderStatus == 34) {
+    return "已取消";
+   } else if (orderStatus == 21 || orderStatus == 22
+     || orderStatus == 23 || orderStatus == 37) {
+    return "已退回";
+   } else {
+    return "处理中";
+   }
+  }
+ 
+ 
+ // ---------------------- 订单类型 -------------------------
+ /**
+    * <h2>获取我的订单列表</h2>
+    * <br/>
+    * 功能点：我的1号店我的订单列表;<br/>
+    * 异常：服务器错误;Token错误;<br/> 
+    * 返回：List<OrderVO><br/> 
+    * 必填参数：token,currentPage,pageSize<br/> 
+    * 返回值：
+    * Page.currentPage;Page.pageSize;Page.totalSize;
+    * Page.OrderVO.orderId;
+    * Page.OrderVO.orderCode;
+    * Page.OrderVO.orderAmount;
+    * Page.OrderVO.orderCreateTime;
+    * Page.OrderVO.orderStatus;
+    * Page.OrderVO.orderStatusForString;
+    * <br/> 
+    * @param token
+    * @param type 1为物流的订单，2为已完成交易的订单，3为取消的订单，4为正在进行的订单，0为2+3+4的订单
+    * @return 返回获取我的订单列表

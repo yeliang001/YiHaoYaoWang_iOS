@@ -1,0 +1,6 @@
+@charset "utf-8";
+.standard{background: url(http://image.yihaodianimg.com/images/v2/standard_rebg.gif) repeat; color: #333333;}
+.standard dt{background:#DDDDDD; font-weight: bold; height: 22px; line-height: 22px; text-indent: 22px;}
+.standard dd{height: 22px; line-height: 22px; overflow: hidden; text-indent: 10px;}
+.standard label{float: left; text-indent: 22px; width: 20%;}
+.standard dd label{border-right: 1px solid #CCCCCC;}

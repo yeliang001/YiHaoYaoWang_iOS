@@ -1,0 +1,143 @@
+//
+//  OrderDone.m
+//  TheStoreApp
+//
+//  Created by towne on 12-6-20.
+//  Copyright (c) 2012年 __MyCompanyName__. All rights reserved.
+//
+
+#import "OrderDone.h"
+#import "TheStoreAppAppDelegate.h"
+#import "OTSOnlinePayNotifier.h"
+#import "DoTracking.h"
+
+@implementation OrderDone
+@synthesize onlineOrderId;
+@synthesize m_delegate;
+
+- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
+{
+    self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
+    if (self) {
+        // Custom initialization
+    }
+    return self;
+}
+
+- (void)didReceiveMemoryWarning
+{
+    // Releases the view if it doesn't have a superview.
+    [super didReceiveMemoryWarning];
+    
+    // Release any cached data, images, etc that aren't in use.
+}
+
+#pragma mark - View lifecycle
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    
+    //iphone5
+    if (iPhone5) {
+        CGRect rc = self.view.frame;
+        rc.size.height = self.view.frame.size.height +  88;
+        rc.origin.y = 0;
+        self.view.frame = rc;
+    }
+    JSTrackingPrama* prama = [[[JSTrackingPrama alloc]initWithJSType:EJStracking_OrderDone extraPramaDic:nil] autorelease];
+    [DoTracking doJsTrackingWithParma:prama];
+    
+    // Do any additional setup after loading the view from its nib.
+    // 标题图片
+	UIImageView * titleBGImg=[[UIImageView alloc]initWithFrame:CGRectMake(0,0,320,44)];
+	titleBGImg.image=[UIImage imageNamed:@"title_bg.png"];
+	
+	// 标题"创建订单成功"
+	UILabel * titleTextLabel=[[UILabel alloc]initWithFrame:CGRectMake(101,0,126,44)];
+	titleTextLabel.text=@"创建订单成功";
+	titleTextLabel.shadowColor = [UIColor darkGrayColor];
+	titleTextLabel.shadowOffset = CGSizeMake(1.0, -1.0);
+	[titleTextLabel setBackgroundColor:[UIColor colorWithRed:1.0 green:0.0 blue:0.0 alpha:0.001f]];
+	titleTextLabel.textColor=[UIColor whiteColor];
+	titleTextLabel.font=[UIFont boldSystemFontOfSize:20.0];
+	[titleBGImg addSubview:titleTextLabel];
+	[titleTextLabel release];
+	// 返回按钮
+	UIButton * backBtn = [[UIButton alloc]initWithFrame:CGRectMake(0,0,61,44)];
+	//[backBtn setTitle:@" 返回" forState:0];
+	[backBtn setTitleColor:[UIColor whiteColor] forState:0];
+	backBtn.titleLabel.font = [UIFont boldSystemFontOfSize:13.0];
+	backBtn.titleLabel.shadowColor = [UIColor darkGrayColor];
+	backBtn.titleLabel.shadowOffset = CGSizeMake(1.0, -1.0);
+	[backBtn setBackgroundImage:[UIImage imageNamed:@"title_left_btn.png"] forState:0];
+    [backBtn setBackgroundImage:[UIImage imageNamed:@"title_left_btn_sel.png"] forState:UIControlStateHighlighted];
+	[backBtn addTarget:self action:@selector(toPreviousPage) forControlEvents:UIControlEventTouchUpInside];	
+	titleBGImg.userInteractionEnabled = YES;
+	[titleBGImg addSubview:backBtn];
+	[backBtn release];
+	[self.view addSubview:titleBGImg];
+	[titleBGImg release];
+    
+    
+    // 支付成功图片
+    UIImageView * ordersuccessImgview=[[UIImageView alloc]initWithFrame:CGRectMake(111,118,98,95)];
+    ordersuccessImgview.image=[UIImage imageNamed:@"order_success.png"];
+    [self.view addSubview:ordersuccessImgview];
+    [ordersuccessImgview release];
+    
+    self.m_delegate = (MyStoreViewController *)[SharedDelegate.tabBarController.viewControllers objectAtIndex:3];
+    
+    // remove local notification
+//    if (onlineOrderId)
+//    {
+//        [[OTSOnlinePayNotifier sharedInstance] removeNotificationWithOrderID:[onlineOrderId longLongValue]];
+//        [OTSOnlinePayNotifier sharedInstance].appBadgeNumber = 0;
+//    }
+    [[OTSOnlinePayNotifier sharedInstance] retrieveOrders];
+}
+
+#pragma mark 返回上一页
+-(void)toPreviousPage {
+	CATransition * animation = [CATransition animation]; 
+	animation.duration = 0.3f;
+	animation.timingFunction = UIViewAnimationCurveEaseInOut;
+	[animation setType:kCATransitionPush];
+	[animation setSubtype: kCATransitionFromLeft];
+	[self.view.superview.layer addAnimation:animation forKey:@"Reveal"];
+	[self.view removeFromSuperview];
+    [SharedDelegate enterMyStoreWithUpdate:YES];
+}
+
+-(IBAction)checkOrder:(id)sender
+{
+
+    DebugLog(@"onlineOrderId onlineOrderId onlineOrderId %@",onlineOrderId);
+    //wait a sec
+    [self performSelector:@selector(delayShowTheOrder) withObject:nil afterDelay:1];
+}
+
+-(void) delayShowTheOrder
+{
+    [m_delegate orderDoneToOrderDetail:onlineOrderId];
+    MyStoreViewController * controller = (MyStoreViewController *)[SharedDelegate.tabBarController.viewControllers objectAtIndex:3];
+    [controller removeSubControllerClass:[OrderDone class]];
+    [controller enterOrder];
+//    [[NSNotificationCenter defaultCenter]postNotificationName:@"RefreshMyOrder" object:nil];
+}
+
+
+- (void)viewDidUnload
+{
+    [super viewDidUnload];
+    // Release any retained subviews of the main view.
+    // e.g. self.myOutlet = nil;
+}
+
+- (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation
+{
+    // Return YES for supported orientations
+    return (interfaceOrientation == UIInterfaceOrientationPortrait);
+}
+
+@end

@@ -1,0 +1,21 @@
+//
+//  YWProductService.h
+//  TheStoreApp
+//
+//  Created by LinPan on 13-7-22.
+//
+//
+
+#import "BaseService.h"
+@class SpecialRecommendInfo;
+@class Page;
+@class ProductInfo;
+@class CommentInfo;
+@interface YWProductService : BaseService
+
+- (Page *)getHomeSpcecialList;
+- (Page *)getCategory;
+
+- (ProductInfo *)getProductDetail:(NSDictionary *)paramDic;
+- (NSMutableArray *)getProductCommentList:(NSDictionary *)paramDic;
+@end

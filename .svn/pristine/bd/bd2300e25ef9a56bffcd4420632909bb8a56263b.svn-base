@@ -1,0 +1,8 @@
+
+1.将libTheStoreLib.a文件加入到工程中
+2.将相应的头文件加入到工程中
+3.工程的Build Settings中，找到 Other Linker Flags，添加参数
+
+-licucore
+-ObjC
+-all_load

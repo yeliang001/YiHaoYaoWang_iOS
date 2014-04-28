@@ -1,0 +1,349 @@
+//
+//  ScanResult.m
+//  TheStoreApp
+//
+//  Created by jiming huang on 12-9-18.
+//  Copyright (c) 2012年 __MyCompanyName__. All rights reserved.
+//
+
+
+#define GOODS_TAG 100
+#define MARKET_PRICE_TAG 105
+#define PRICE_TAG 101
+#define HAVE_GOODS_TAG 102
+#define BUTTON_TAG 103
+#define DEFAULT_IMAGE_TAG 104
+#define SHOPPING_COUNT_TAG 109
+
+#import "ScanResult.h"
+#import "OTSNaviAnimation.h"
+#import "TheStoreAppAppDelegate.h"
+#import "DataController.h"
+#import "NSString+MD5Addition.h"
+#import "DoTracking.h"
+#import "LocalCartItemVO.h"
+#import "OTSProductDetail.h"
+#import "CategoryProductCell.h"
+#import "YWLocalCatService.h"
+#import "LocalCarInfo.h"
+#import "ProductInfo.h"
+#import "UserInfo.h"
+#import "RecommendView.h"
+#import "mobidea4ec.h"
+
+@implementation ScanResult
+
+@synthesize m_InputDictionary;
+
+- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
+{
+    self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
+    if (self) {
+        // Custom initialization
+    }
+    return self;
+}
+
+- (void)didReceiveMemoryWarning
+{
+    // Releases the view if it doesn't have a superview.
+    [super didReceiveMemoryWarning];
+    
+    // Release any cached data, images, etc that aren't in use.
+}
+
+#pragma mark - View lifecycle
+
+/*
+// Implement loadView to create a view hierarchy programmatically, without using a nib.
+- (void)loadView
+{
+}
+*/
+
+// Implement viewDidLoad to do additional setup after loading the view, typically from a nib.
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    [self initScanResult];
+}
+
+-(void)initScanResult
+{
+    m_ProductArray=[m_InputDictionary objectForKey:@"Products"];
+    m_BarCodeString=[m_InputDictionary objectForKey:@"BarCode"];
+    if (m_ProductArray!=nil && [m_ProductArray count]>=1) {//扫描到多个商品
+        CGFloat height=[m_ProductArray count]*100.0;
+        if (height>self.view.frame.size.height-44.0) {
+            height=self.view.frame.size.height-44.0;
+        }
+        m_TableView=[[UITableView alloc] initWithFrame:CGRectMake(0, 44, 320, height) style:UITableViewStylePlain];
+        [m_TableView setDelegate:self];
+        [m_TableView setDataSource:self];
+        [self.view addSubview:m_TableView];
+    }
+    else
+    {
+        //扫描到无商品
+        UIImageView *imageView=[[UIImageView alloc] initWithFrame:CGRectMake(105, iPhone5? 68 : 48, 110, 110)];
+        [imageView setImage:[UIImage imageNamed:@"scan_logo.png"]];
+        [self.view addSubview:imageView];
+        [imageView release];
+        
+        UILabel *label=[[UILabel alloc] initWithFrame:CGRectMake(0, iPhone5? 170 : 150, 320, 50)];
+        [label setBackgroundColor:[UIColor clearColor]];
+        [label setNumberOfLines:2];
+        [label setText:[NSString stringWithFormat:@"条码\"%@\"\n暂无相关商品",m_BarCodeString]];
+        [label setTextAlignment:NSTextAlignmentCenter];
+        [label setTextColor:[UIColor colorWithRed:153.0/255.0 green:153.0/255.0 blue:153.0/255.0 alpha:1.0]];
+        [self.view addSubview:label];
+        [label release];
+        
+        _recommendView = [[RecommendView alloc] initWithFrame:CGRectMake(0, self.view.height-230, 320, 185)];
+        [self.view addSubview:_recommendView];
+        _recommendView.delegate = self;
+
+        
+        [BfdAgent recommend:self recommendType:kRCScan options:nil];
+        
+    }
+}
+
+//返回按钮
+-(IBAction)returnBtnClicked:(id)sender
+{
+    [SharedDelegate enterHomePageRoot];
+    [self removeSelf];
+}
+
+#pragma mark - 加入购物车
+//-(void)accessoryButtonTap:(UIControl *)button withEvent:(UIEvent *)event
+//{
+//    NSIndexPath *indexPath=[m_TableView indexPathForRowAtPoint:[[[event touchesForView:button] anyObject] locationInView:m_TableView]];//获得NSIndexPath
+//	if (indexPath==nil)
+//    {
+//		return;
+//	}
+//    else
+//    {
+//		int index=[indexPath row];//获得选择的第几行
+//		ProductInfo *productVO=[m_ProductArray objectAtIndex:index];
+////		if ([productVO.canBuy isEqualToString:@"true"])
+////        {
+////            if ([GlobalValue getGlobalValueInstance].token!=nil)
+////            {
+////                if (!m_ThreadRunning)
+////                {
+////                    m_ThreadRunning=YES;
+////                    [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadAddCart:) toTarget:self withObject:productVO];
+////                }
+////            }
+////            else
+////            {
+////                //购买数量
+//                int buyQuantity;
+////                if (productVO.shoppingCount!=nil && [productVO.shoppingCount intValue]>1)
+////                {
+////                    buyQuantity=[productVO.shoppingCount intValue];
+////                } else {
+//                    buyQuantity=1;
+////                }
+//        
+//        YWLocalCatService *localCatService = [[YWLocalCatService alloc] init];
+//        LocalCarInfo *localCart = [[LocalCarInfo alloc] initWithProductId:productVO.productId
+//                                                            shoppingCount:[NSString stringWithFormat:@"%d",buyQuantity]
+//                                                                 imageUrl:productVO.mainImg3
+//                                                                    price:productVO.price
+//                                                               provinceId:[[GlobalValue getGlobalValueInstance].provinceId stringValue]
+//                                                                      uid:[GlobalValue getGlobalValueInstance].userInfo.ecUserId];
+//        
+//         [localCatService saveLocalCartToDB:localCart];
+//
+//        
+//        [localCart release];
+//        [SharedDelegate setCartNum:buyQuantity];
+//        [[NSNotificationCenter defaultCenter] postNotificationName:@"CartChanged" object:nil];
+//        
+//		}
+//
+//}
+
+//新线程加入购物车
+//-(void)newThreadAddCart:(ProductVO*)productVO
+//{
+//    NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
+//    CartService *service=[[[CartService alloc] init] autorelease];
+//    //购买数量
+//    int buyQuantity;
+//    if (productVO.shoppingCount!=nil && [productVO.shoppingCount intValue]>1) {
+//        buyQuantity=[productVO.shoppingCount intValue];
+//    } else {
+//        buyQuantity=1;
+//    }
+//    
+//    AddProductResult *result=[service addSingleProduct:[GlobalValue getGlobalValueInstance].token productId:[productVO productId] merchantId:[productVO merchantId] quantity:[NSNumber numberWithInt:buyQuantity] promotionid:[productVO promotionId]];
+//    if (result==nil || [result isKindOfClass:[NSNull class]]) {
+//        [self performSelectorOnMainThread:@selector(showInfo:) withObject:@"网络异常，请检查网络配置..." waitUntilDone:NO];
+//    } else if ([[result resultCode] intValue]==1) {//成功
+//        [self performSelectorOnMainThread:@selector(productChanged:) withObject:[NSNumber numberWithInt:buyQuantity] waitUntilDone:YES];
+//    } else {
+//        [self performSelectorOnMainThread:@selector(showInfo:) withObject:[result errorInfo] waitUntilDone:NO];
+//    }
+//    m_ThreadRunning=NO;
+//    [pool drain];
+//}
+
+-(void)productChanged:(NSNumber *)number
+{
+    [SharedDelegate showAddCartAnimationWithDelegate:self];
+    //购物车商品数量
+    [SharedDelegate setCartNum:[number intValue]];
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"CartChanged" object:nil];
+}
+
+-(void)showInfo:(NSString*)info
+{
+    UIAlertView *alertView=[[UIAlertView alloc] initWithTitle:nil message:info delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
+    [alertView show];
+    [alertView release];
+}
+
+#pragma mark - UITableViewDelegate
+-(NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    return [m_ProductArray count];
+}
+
+-(CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+	return 100.0;
+}
+
+-(UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath 
+{
+	ProductVO *productVO=[m_ProductArray objectAtIndex:[indexPath row]];
+	
+    CategoryProductCell *cell=(CategoryProductCell*)[tableView dequeueReusableCellWithIdentifier:@"ScanResultCell"];
+    if (cell==nil) {
+        cell=[[[CategoryProductCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"ScanResultCell"] autorelease];
+    }
+    //商品名称
+    cell.productNameLbl.text=productVO.cnName;
+    //市场价格
+    //cell.marketPriceLbl.text=[NSString stringWithFormat:@"￥%.2f",[productVO.maketPrice floatValue]];
+    //商品价格
+    cell.priceLbl.text=[NSString stringWithFormat:@"￥%.2f",[productVO.price floatValue]];
+    //商品库存
+    NSString *canBuyStr;
+    if ([productVO.canBuy isEqualToString:@"true"]) {
+        canBuyStr=@"有货";
+    } else {
+        canBuyStr=@"已售完";
+    }
+    if (productVO.experienceCount!=nil) {
+        [cell.shoppingCountLbl setText:[NSString stringWithFormat:@"(%@)",productVO.experienceCount]];
+    } else {
+        [cell.shoppingCountLbl setText:@"(0)"];
+    }
+    for (NSUInteger i=0; i<5; i++) {
+        UIImageView *subView=(UIImageView *)[cell.contentView viewWithTag:1000+i];
+        if (i<[[productVO score] intValue]) {
+            subView.image=[UIImage imageNamed:@"pentagon_Yellow.png"];
+        }
+    }
+    cell.canBuyLbl.text=canBuyStr;
+    //操作按钮
+    [cell.operateBtn addTarget:self action:@selector(accessoryButtonTap:withEvent:) forControlEvents:UIControlEventTouchUpInside];
+    if ([productVO.canBuy isEqualToString:@"true"]) {
+        [cell.operateBtn setImage:[UIImage imageNamed:@"product_cart.png"] forState:0];
+    } else {
+        [cell.operateBtn setImage:[UIImage imageNamed:@"product_cart_ni.png"] forState:0];
+    }
+    //有赠品
+    if ([[productVO hasGift] intValue]==1) {
+        [cell.giftLogo setHidden:NO];
+    } else {
+        [cell.giftLogo setHidden:YES];
+    }
+    //商品图片
+    cell.imageView.image=[UIImage imageNamed:@"defaultimg85.png"];
+    [cell downloadImage:productVO.miniDefaultProductUrl];
+	return cell;
+}
+
+-(void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
+	ProductVO *productVO=[m_ProductArray objectAtIndex:[indexPath row]];
+	
+    OTSProductDetail *productDetail=[[[OTSProductDetail alloc] initWithProductId:[productVO.productId longValue] promotionId:productVO.promotionId fromTag:PD_FROM_OTHER] autorelease];
+    [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+    [self pushVC:productDetail animated:YES];
+}
+
+-(void)releaseMyResource
+{
+    OTS_SAFE_RELEASE(m_InputDictionary);
+    OTS_SAFE_RELEASE(m_TableView);
+}
+
+- (void)viewDidUnload
+{
+    [self releaseMyResource];
+    [super viewDidUnload];
+}
+
+-(void)dealloc
+{
+    [self releaseMyResource];
+    [_recommendView release];
+    [super dealloc];
+}
+
+- (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation
+{
+    // Return YES for supported orientations
+    return (interfaceOrientation == UIInterfaceOrientationPortrait);
+}
+
+
+
+#pragma mark - 百分点
+- (void)mobidea_Recs:(NSError *)error feedback:(id)feedback
+{
+    if ([feedback isKindOfClass:[NSArray class]])
+    {
+        _recommendView.hidden = NO;
+        
+        NSMutableArray *productList = [[NSMutableArray alloc] init];
+        
+        NSArray *result = (NSArray *)feedback;
+        for (NSDictionary *dic in result)
+        {
+            ProductInfo *product = [[ProductInfo alloc] init];
+            product.productId = [NSString stringWithFormat:@"%d",[dic[@"iid"] integerValue]];
+            product.productImageUrl = dic[@"img"];
+            product.price = [NSString stringWithFormat:@"%.2f", [dic[@"price"] floatValue]];
+            product.marketPrice = [NSString stringWithFormat:@"%.2f", [dic[@"mktp"] floatValue]];
+            product.name = dic[@"name"];
+            
+            [productList addObject:product];
+            [product release];
+        }
+        
+        
+        [_recommendView updateRecommendProducts:productList];
+    }
+
+}
+
+- (void)selectedRecommendProduct:(ProductInfo *)product
+{
+    //反馈
+    [BfdAgent feedback:nil recommendId:kRCScan itemId:product.productId options:nil];
+    
+    OTSProductDetail *productDetail=[[[OTSProductDetail alloc] initWithProductId:[product.productId longLongValue] promotionId:nil fromTag:PD_FROM_SEARCH] autorelease];
+    [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+    [self pushVC:productDetail animated:YES];
+
+}
+
+
+@end

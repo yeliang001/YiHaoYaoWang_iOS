@@ -1,0 +1,294 @@
+//
+//  YWProductService.m
+//  TheStoreApp
+//
+//  Created by LinPan on 13-7-22.
+//
+//
+
+#import "YWProductService.h"
+#import "SpecialRecommendInfo.h"
+#import "ResponseInfo.h"
+#import "SpecialRecommendInfo.h"
+#import "Page.h"
+#import "CategoryInfo.h"
+#import "AdFloorInfo.h"
+#import "ProductInfo.h"
+#import "CommentInfo.h"
+@implementation YWProductService
+
+- (Page *)getHomeSpcecialList
+{
+    ResponseInfo *response = [self startRequestWithMethod:@"gethomepage"];
+    NSLog(@"gethomepage response==> %@",response);
+    if (response.isSuccessful && response.statusCode == 200)
+    {
+        NSMutableArray *resultList = [[[NSMutableArray alloc] init] autorelease];
+        
+        NSDictionary *dataDic = response.data;
+        NSDictionary *jiaoDianTuDic = dataDic[@"index_jiaodiantu"];
+        NSArray *specials = jiaoDianTuDic[@"specials"];
+        for (NSDictionary *dic in specials)
+        {
+            SpecialRecommendInfo *specialInfo = [[SpecialRecommendInfo alloc] init];
+            specialInfo.specialId = [dic[@"id"] stringValue];
+            specialInfo.imageUrl = dic[@"image_url"];
+            specialInfo.name = dic[@"name"];
+            specialInfo.type = [dic[@"type"] intValue];
+            specialInfo.sindex = [dic[@"sindex"] intValue];
+            specialInfo.specialType = [dic[@"specialtype"] intValue];
+            
+            [resultList addObject:specialInfo];
+            [specialInfo release];
+        }
+        
+        //楼层广告
+        NSMutableArray *adFloorList = [[[NSMutableArray alloc] init] autorelease];
+        NSArray *floorArr = dataDic[@"index_ggl"];
+        for (NSDictionary *dic in floorArr)
+        {
+            AdFloorInfo *floor = [[AdFloorInfo alloc] init];
+            NSDictionary *tiltDic = dic[@"title"];
+            floor.titleImgUrl = tiltDic[@"image_url"];
+            floor.title = tiltDic[@"name"];
+        
+            NSMutableArray *productListInAd = [[[NSMutableArray alloc] init] autorelease];
+            for (int i = 1;  i <= 3;  ++i)
+            {
+                NSString *ggl = [NSString stringWithFormat:@"index_ggl_ggw_%d",i];
+                
+                NSDictionary * p1Dic = dic[ggl];
+                SpecialRecommendInfo *specialInfo = [[SpecialRecommendInfo alloc] init];
+                specialInfo.specialId = [p1Dic[@"id"] stringValue];
+                specialInfo.imageUrl = p1Dic[@"image_url"];
+                specialInfo.name = p1Dic[@"name"];
+                specialInfo.type = [p1Dic[@"type"] intValue];
+                specialInfo.sindex = [p1Dic[@"sindex"] intValue];
+                specialInfo.specialType = [p1Dic[@"specialtype"] intValue];
+                [productListInAd addObject: specialInfo];
+                [specialInfo release];
+            }
+            floor.productList = productListInAd;
+            
+            NSString *keyword = dic[@"keyword"];
+            floor.keywordList = [keyword componentsSeparatedByString:@","];
+            
+            [adFloorList addObject:floor];
+            [floor release];
+        }
+        Page *page = [[Page alloc] init];
+        page.objList = resultList;
+        page.adFloorList = adFloorList;
+        return [page autorelease];
+    }
+    
+    //Test
+//    NSMutableArray *resultList = [[[NSMutableArray alloc] init] autorelease];
+//    SpecialRecommendInfo *specialInfo = [[SpecialRecommendInfo alloc] init];
+//    specialInfo.specialId = @"123";
+//    specialInfo.imageUrl = @"http://www.111.com.cn/cmsPage/show.do?pageId=50270";
+//    specialInfo.name = @"测试";
+//    specialInfo.type = 1;
+//    specialInfo.sindex = 2;
+//    specialInfo.specialType = 3;
+//    [resultList addObject:specialInfo];
+//    [specialInfo release];
+//    Page *page = [[Page alloc] init];
+//    page.objList = resultList;
+//    return [page autorelease];
+    return nil;
+}
+
+- (Page *)getCategory
+{
+    ResponseInfo *response = [self startRequestWithMethod:@"products.category.getcategory"];
+    if (response.isSuccessful && response.statusCode == 200)
+    {
+        NSMutableArray *resultList = [[[NSMutableArray alloc] init] autorelease];
+        
+        NSDictionary *dataDic = response.data;
+        NSArray *categoryList = dataDic[@"categorylist"];
+        for (NSDictionary *dic in categoryList)
+        {
+            CategoryInfo *categoryInfo = [[CategoryInfo alloc] init];
+            categoryInfo.cid = [dic[@"id"] stringValue];
+            categoryInfo.parentId = [dic[@"parentId"] stringValue];
+            categoryInfo.type = [dic[@"type"] stringValue];
+            categoryInfo.name = dic[@"name"];
+            categoryInfo.imageUrl = dic[@"imageUrl"];
+            
+            [resultList addObject:categoryInfo];
+            [categoryInfo release];
+        }
+        
+        Page *page = [[Page alloc] init];
+        page.objList = resultList;
+        return [page autorelease];
+    }
+    return nil;
+}
+
+- (ProductInfo *)getProductDetail:(NSDictionary *)paramDic
+{
+    NSString * requestMethod = [NSString stringWithFormat:@"products.getproduct%@",[self convertParam2String:paramDic]];
+    ResponseInfo *response = [self startRequestWithMethod:requestMethod];
+    
+    if (response.isSuccessful && response.statusCode == 200)
+    {
+        NSDictionary *dataDic = response.data;
+
+        NSDictionary *productDic = dataDic[@"item_info"];
+        if (productDic.count > 0)
+        {
+            ProductInfo *product = [[ProductInfo alloc] init];
+            product.productId = productDic[@"id"];
+            NSString *name = productDic[@"productname"];
+            product.name = [name isKindOfClass:[NSNull class]] ? @"无名字" : name;
+            product.category = productDic[@"category"];
+            product.brandId = productDic[@"brandId"];
+            product.brandName = productDic[@"brandName"];
+            product.time = productDic[@"time"];
+            product.productImageUrl = productDic[@"img"];
+            product.price = productDic[@"originalprice"];
+            product.marketPrice = productDic[@"marketPrice"];
+            product.status = productDic[@"status"];
+            product.store = productDic[@"store"];
+            product.saleType = productDic[@"saleType"];
+            product.showPic = productDic[@"showPic"];
+            product.subTotalScore = productDic[@"subTotalScore"];
+            product.littlePic = productDic[@"littlePic"];
+            product.userGrade = productDic[@"userGrade"];
+            product.userGradeCount = productDic[@"usergradecount"];
+            product.comments = productDic[@"comments"];
+            product.salesCount = productDic[@"salesCount"];
+            product.attribute = productDic[@"attribute"];
+            product.specialStatus = productDic[@"specialStatus"];
+            product.filter = productDic[@"filter"];
+            product.prescription = [productDic[@"prescription"] stringValue];
+            product.morePrice = productDic[@"morePrice"];
+            
+            product.categoryId = productDic[@"catalogid"];
+            product.categoryName = productDic[@"categoryName"];
+            product.color = productDic[@"color"];
+            product.count = productDic[@"count"];
+            product.gift = productDic[@"gift"];
+            product.mainImg1 = productDic[@"mainimg1"];
+            product.mainImg2 = productDic[@"mainimg2"];
+            product.mainImg3 = productDic[@"mainimg3"];
+            product.mainImg4 = productDic[@"mainimg4"];
+            product.mainImg5 = productDic[@"mainimg5"];
+            product.mainImg6 = productDic[@"mainimg6"];
+            product.productNO = productDic[@"productno"];
+            product.recommendPrice = productDic[@"recommendprice"];
+            product.saleInfo = productDic[@"saleinfo"];
+            product.saleService = productDic[@"saleservice"];
+            product.sellType = productDic[@"selltype"];
+            product.seriesId = productDic[@"seriesid"];
+            product.seriesName = productDic[@"seriesname"];
+            product.size = productDic[@"size"];
+            product.sellerId = productDic[@"venderid"];
+            product.taocanList = productDic[@"taocanList"];
+            product.unit = productDic[@"unit"];
+            
+            
+            product.desc = dataDic[@"product_desc"];
+            
+            //商品辅图
+            NSMutableArray *midImgList = [[NSMutableArray alloc] init];
+            NSMutableArray *largeImgList = [[NSMutableArray alloc] init];
+            
+            NSArray *imgList = dataDic[@"product_picture"];
+            for (NSDictionary *imgDic in imgList)
+            {
+                NSString *midImgStr = imgDic[@"image3"];
+                NSString *largeImgStr = imgDic[@"image2"];
+                
+                [midImgList addObject:midImgStr];
+                [largeImgList addObject:largeImgStr];
+            }
+            product.middleDetailImgList = midImgList;
+            [midImgList release];
+            product.largeDetailImgList = largeImgList;
+            [largeImgList release];
+            
+            return [product autorelease];
+        }
+
+    }
+    return nil;
+}
+
+
+- (NSMutableArray *)getProductCommentList:(NSDictionary *)paramDic
+{
+    NSString * requestMethod = [NSString stringWithFormat:@"products.getproductcommentlist%@",[self convertParam2String:paramDic]];
+    ResponseInfo *response = [self startRequestWithMethod:requestMethod];
+    if (response.isSuccessful && response.statusCode == 200)
+    {
+        NSMutableArray *resultList = [[[NSMutableArray alloc] init] autorelease];
+        
+        NSDictionary *dataDic = response.data;
+        NSArray *commentList = dataDic[@"comment_list"];
+        for (NSDictionary *dic in commentList)
+        {
+            CommentInfo *comment = [[CommentInfo alloc] init];
+            comment.adminName = dic[@"adminName"];
+            comment.allUserSocre = dic[@"allUserScore"];
+            comment.allUserStatus = dic[@"allUserStatus"];
+            comment.auditMode = dic[@"auditMode"];
+            comment.auditing = dic[@"auditing"];
+            comment.commentScore = dic[@"commentScore"];
+            comment.commentScoreStatus = dic[@"commentScoreStatus"];
+            comment.consultationType = dic[@"consultationType"];
+            comment.content = dic[@"content"] ;
+            comment.goodsId = dic[@"goodsId"] ;
+            comment.grade = dic[@"grade"] ;
+            comment.commentId = dic[@"id"];
+            comment.isEmail = dic[@"isEmail"];
+            comment.issuedDate = dic[@"issuedDate"];
+            comment.mainimg4 = dic[@"mainimg4"];
+            comment.nay = dic[@"nay"];
+            comment.orderDate = dic[@"orderDate"];
+            comment.orderId = dic[@"orderId"];
+            comment.pId = dic[@"pId"];
+            comment.priority = dic[@"priority"];
+            comment.productName = dic[@"productName"];
+            comment.putTopDate = dic[@"putTopDate"];
+            comment.putTopScore = dic[@"putTopScore"];
+            comment.putTopStatus = dic[@"putTopStatus"];
+            comment.recommendedDate = dic[@"recommendedDate"];
+            comment.recommendedScore = dic[@"recommendedScore"];
+            comment.recommendedStatus = dic[@"recommendedStatus"];
+            comment.releaseDate = dic[@"releaseDate"];
+            comment.replyCount = dic[@"replyCount"];
+            comment.replys = dic[@"replys"];
+            comment.reviewType = dic[@"reviewType"];
+            comment.rewardScore = dic[@"rewardScore"];
+            comment.rewardScoreStatus = dic[@"rewardScoreStatus"];
+            comment.scoreDate = dic[@"scoreDate"];
+            comment.status = dic[@"status"];
+            comment.subcatalog = dic[@"subcatalog"];
+            comment.subject = dic[@"subject"];
+            comment.top5Score = dic[@"top5Score"];
+            comment.top5Status = dic[@"top5Status"];
+            comment.userImg = dic[@"userImg"];
+            comment.userIp = dic[@"userIp"];
+            comment.userLevelId = dic[@"userLevelId"];
+            comment.userName = dic[@"userName"];
+            comment.yes = dic[@"yes"];
+            
+            [resultList addObject:comment];
+            [comment release];
+        }
+        return resultList;
+    }
+    return nil;
+}
+
+
+
+
+
+
+
+@end

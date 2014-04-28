@@ -1,0 +1,501 @@
+//
+//  PopViewController.m
+//  yhd
+//
+//  Created by  on 12-6-29.
+//  Copyright (c) 2012年 __MyCompanyName__. All rights reserved.
+//
+
+#import "PopViewController.h"
+#import "SearchAttributeVO.h"
+#import "FacetValue.h"
+#import "DataHandler.h"
+#import <QuartzCore/QuartzCore.h>
+#import "SearchBrandVO.h"
+#import "SearchPriceVO.h"
+#import "PriceRange.h"
+#define kPopCellHeight 45
+@interface PopViewController ()
+
+@end
+
+@implementation PopViewController
+@synthesize listData,itemDic,popDelegate,type,searchPriceVO,searchBrandVO;
+- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
+{
+    self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
+    if (self) {
+        // Custom initialization
+    }
+    return self;
+}
+- (void)dealloc
+{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    
+    [listData release];
+    [searchBrandVO release];
+    [searchPriceVO release];
+    [itemDic release];
+    //[facetValueIds release];
+    popDelegate=nil;
+    [super dealloc];
+}
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+     // self.view.backgroundColor=[UIColor colorWithPatternImage:[UIImage imageNamed:@"top_bg.png"]];
+//    nameLabel.layer.cornerRadius = 8;
+//    nameLabel.layer.masksToBounds = YES;
+
+    if (type==1) {
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleFilterChange:)name:kNotifyFilterChange object:nil];
+        
+        
+        popTableView.frame=CGRectMake(0, 37, 243, 180);
+        UIButton *resetBut=[UIButton buttonWithType:UIButtonTypeCustom];
+        [resetBut setImage:[UIImage imageNamed:@"filter_rest2.png"] forState:UIControlStateHighlighted];
+        [resetBut setImage:[UIImage imageNamed:@"filter_rest1.png"] forState:UIControlStateNormal];
+        
+        [resetBut addTarget:self action:@selector(reset:) forControlEvents:UIControlEventTouchUpInside];
+        [resetBut setFrame:CGRectMake(125, 235, 102,32)];
+        [self.view addSubview:resetBut];
+        
+        UIButton *closeBut=[UIButton buttonWithType:UIButtonTypeCustom];
+        [closeBut setImage:[UIImage imageNamed:@"filter_close2.png"] forState:UIControlStateHighlighted];
+        [closeBut setImage:[UIImage imageNamed:@"filter_close1.png"] forState:UIControlStateNormal];        
+        [closeBut addTarget:self action:@selector(close:) forControlEvents:UIControlEventTouchUpInside];
+        [closeBut setFrame:CGRectMake(190, 4, 46,26)];
+        [self.view addSubview:closeBut];
+    }else {
+        UIButton *backBut=[UIButton buttonWithType:UIButtonTypeCustom];
+        [backBut setImage:[UIImage imageNamed:@"filter_back2.png"] forState:UIControlStateHighlighted];
+        [backBut setImage:[UIImage imageNamed:@"filter_back1.png"] forState:UIControlStateNormal];        [backBut addTarget:self action:@selector(back:) forControlEvents:UIControlEventTouchUpInside];
+        [backBut setFrame:CGRectMake(10, 4, 46,26)];
+        [self.view addSubview:backBut];
+        
+    
+    }
+
+}
+
+
+-(void)viewWillAppear:(BOOL)animated{
+   //self.contentSizeForViewInPopover = CGSizeMake(200.0, listData.count*kPopCellHeight);
+
+}
+-(void)back:(id)sender{
+    [self.navigationController popViewControllerAnimated:YES];
+}
+-(void)reset:(id)sender{
+    [dataHandler.filterDic removeAllObjects];
+    [popTableView reloadData];
+    [popDelegate popItemSelected:[NSNumber numberWithInt:0] attribute:@"" priceRange:@""];
+     [[NSNotificationCenter defaultCenter] postNotificationName:kNotifyFilterChange object:nil userInfo:nil];
+}
+-(void)close:(id)sender{
+    [popDelegate popClose];
+}
+- (void)handleFilterChange:(NSNotification *)note{
+    if (note.userInfo) {
+        [dataHandler.filterDic addEntriesFromDictionary:note.userInfo];
+        [popTableView reloadData];
+    }
+}
+- (void)viewDidUnload
+{
+    [super viewDidUnload];
+    popTableView=nil;
+    // Release any retained subviews of the main view.
+    // e.g. self.myOutlet = nil;
+}
+
+#pragma mark - Table view data source
+
+//- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
+//{
+////#warning Potentially incomplete method implementation.
+//    // Return the number of sections.
+//    return 0;
+//}
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    
+    return kPopCellHeight;
+}
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+
+    return listData.count;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    static NSString *CellIdentifier = @"Cell";
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
+    if (cell==nil) {
+        cell=[[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:CellIdentifier]autorelease];
+    }
+    for (UIView* v in cell.contentView.subviews) {
+        [v removeFromSuperview];
+    }
+    cell.selectionStyle=UITableViewCellSelectionStyleGray;
+    NSUInteger row = [indexPath row];
+    if (type==1) {
+        NSString *name=nil;
+        if ( [[self.listData objectAtIndex:row] isKindOfClass:[NSString class]]) {
+            //品牌、价格
+            name=[self.listData objectAtIndex:row];
+        }else {
+            //导购属性
+            SearchAttributeVO *searchAttribut=[self.listData objectAtIndex:row];
+            name=searchAttribut.attrName;
+            
+        }
+        //被选项
+        if (row!=0) {
+            if ([dataHandler.filterDic objectForKey:name]) {
+                UILabel *filterLabel = [[UILabel alloc] initWithFrame:CGRectMake(100, 5, 110.0, 35.0) ];
+                filterLabel.textColor = kBlackColor;
+                filterLabel.backgroundColor=[UIColor clearColor];
+                filterLabel.font=[filterLabel.font fontWithSize:17.0];
+                filterLabel.textAlignment=NSTextAlignmentRight;
+                if ([[dataHandler.filterDic objectForKey:name] isKindOfClass:[FacetValue class]]) {
+                    FacetValue *facetValue=[dataHandler.filterDic objectForKey:name];
+                    filterLabel.text=facetValue.name;
+                }
+                //价格
+                else{
+                    PriceRange *priceRange=[dataHandler.filterDic objectForKey:name];
+                    
+                    NSString *priceRangeStr=nil;
+                    if ([priceRange.end intValue]==2147483647) {
+                        priceRangeStr=[NSString stringWithFormat:@"%@以上",priceRange.start];
+                        if (priceRange.start.intValue==0) {
+                            priceRangeStr=@"全部";
+                        }
+                        
+                    }else{
+                        priceRangeStr=[NSString stringWithFormat:@"%@-%@",priceRange.start,priceRange.end];
+                        
+                    }
+                    filterLabel.text=priceRangeStr;
+                }
+                if ([name isEqualToString:@"全部"]) {
+                    filterLabel.text=@"";
+                }
+                [cell.contentView addSubview:filterLabel];
+                [filterLabel release];
+                
+            }
+        }
+        cell.textLabel.font=[UIFont fontWithName:@"Helvetica" size:16];
+        cell.textLabel.text=name;
+
+        UIImageView *imageView=[[UIImageView alloc] initWithFrame:CGRectMake(220, 17,7, 10)];
+        if (row==0) {
+            if ([[dataHandler.filterDic objectForKey:name] intValue]) {
+                cell.imageView.image=[UIImage imageNamed:@"filter_box_on"];
+            }else{
+                cell.imageView.image=[UIImage imageNamed:@"filter_box"];
+            }
+        }else{
+            cell.imageView.image=nil;
+            imageView.image=[UIImage imageNamed:@"filter_jian.png"];
+        }
+        [cell.contentView insertSubview:imageView atIndex:1];
+        [imageView release];        
+    }
+    else {
+        cell.textLabel.font=[UIFont fontWithName:@"Helvetica" size:16];
+        if ([[self.listData objectAtIndex:row] isKindOfClass:[FacetValue class]]) {
+            FacetValue *facetValue=[self.listData objectAtIndex:row];
+            cell.textLabel.text=facetValue.name;
+            FacetValue *facetValueSelected=[dataHandler.filterDic objectForKey:self.title];
+            if ([facetValueSelected.name isEqualToString:facetValue.name]) {
+                UIImageView *imageView=[[UIImageView alloc] initWithFrame:CGRectMake(200, 17,22, 19)];
+                imageView.image=[UIImage imageNamed:@"filter_dui.png"];
+                [cell.contentView insertSubview:imageView atIndex:1];
+                [imageView release];
+            }
+
+        }
+        //价格子项
+        else if ([[self.listData objectAtIndex:row] isKindOfClass:[PriceRange class]]){
+            PriceRange *priceRange=[self.listData objectAtIndex:row];
+           
+            NSString *priceRangeStr=nil;
+            if ([priceRange.end intValue]==2147483647) {
+                priceRangeStr=[NSString stringWithFormat:@"%@以上",priceRange.start];
+                if (priceRange.start.intValue==0) {
+                    priceRangeStr=@"全部";
+                }
+            }else{
+                priceRangeStr=[NSString stringWithFormat:@"%@-%@",priceRange.start,priceRange.end];
+
+            }
+           
+            cell.textLabel.text=priceRangeStr;
+            PriceRange *priceRangeSelected=[dataHandler.filterDic objectForKey:self.title];
+            NSString *priceRangeSelectedStr=nil;
+            if ([priceRangeSelected.end intValue]==2147483647) {
+                priceRangeSelectedStr=[NSString stringWithFormat:@"%@以上",priceRangeSelected.start];
+                if (priceRangeSelected.start.intValue==0) {
+                    priceRangeSelectedStr=@"全部";
+                }
+            }else{
+                priceRangeSelectedStr=[NSString stringWithFormat:@"%@-%@",priceRangeSelected.start,priceRangeSelected.end];
+                
+            }
+            if ([priceRangeSelectedStr isEqualToString:priceRangeStr]) {
+                UIImageView *imageView=[[UIImageView alloc] initWithFrame:CGRectMake(200, 17,22, 19)];
+                imageView.image=[UIImage imageNamed:@"filter_dui.png"];
+                [cell.contentView insertSubview:imageView atIndex:1];
+                [imageView release];
+            }
+
+        }
+    }
+   
+       
+    
+    return cell;
+}
+
+
+#pragma mark - Table view delegate
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    int row = indexPath.row;
+   
+    if (type == 1)
+    {
+        //1号店筛选
+        if (row==0) {
+            NSNumber* isyihaodian=nil;            
+            //获取以前筛选条件
+            NSMutableString *filterMutableString = nil;
+            NSNumber *barandId = [NSNumber numberWithInt:0];
+            NSString *priceRangeStr = @"";
+            int i = 0;
+            
+            NSArray *keys = [dataHandler.filterDic allKeys];
+            for (NSString * key in keys)
+            {
+                
+                    if([key isEqualToString:@"品牌"])
+                    {
+                        FacetValue * facetItem = [dataHandler.filterDic objectForKey:key];
+                        barandId = facetItem.nid;
+                    }
+                    else if([key isEqualToString:@"价格"])
+                    {
+                        PriceRange * priceItem = [dataHandler.filterDic objectForKey:key];
+                        if ([priceItem.end intValue] == 2147483647)
+                        {
+                            priceRangeStr=[NSString stringWithFormat:@"%@,",priceItem.start];
+                        }
+                        else if ([priceItem.start intValue] == 0)
+                        {
+                            priceRangeStr=[NSString stringWithFormat:@",%@",priceItem.end];
+                        }
+                        else
+                        {
+                            priceRangeStr=[NSString stringWithFormat:@"%@,%@",priceItem.start,priceItem.end];
+                        }
+                    }else if ([key isEqualToString:YihaodianOnly]){
+                        isyihaodian  =[dataHandler.filterDic valueForKey:key];
+                        if (isyihaodian.intValue==0) {
+                            isyihaodian=[NSNumber numberWithInt:2];
+                        }else{
+                            isyihaodian=[NSNumber numberWithInt:0];
+                        }
+                    }
+                    else
+                    {
+                        FacetValue * facetItem = [dataHandler.filterDic objectForKey:key];
+                        if (i == 0)
+                        {
+                            filterMutableString = [NSMutableString stringWithCapacity:1];
+                            [filterMutableString appendFormat:@"%@", facetItem.nid];
+                        }
+                        else
+                        {
+                            [filterMutableString appendFormat:@",%@", facetItem.nid];
+                        }
+                    }
+                    
+                    i++;
+            }
+            
+
+            NSDictionary* noteDic=[NSDictionary dictionaryWithObject:isyihaodian forKey:YihaodianOnly];
+            [[NSNotificationCenter defaultCenter] postNotificationName:kNotifyFilterChange object:nil userInfo:noteDic];
+            [tableView reloadRowsAtIndexPaths:[NSArray arrayWithObject:[NSIndexPath indexPathForRow:0 inSection:0]] withRowAnimation:UITableViewRowAnimationNone];
+            [popDelegate popItemSelected:barandId attribute:filterMutableString priceRange:priceRangeStr];
+            return;
+        }
+        PopViewController *pop = [[[PopViewController alloc] initWithNibName:nil bundle:nil] autorelease];
+        pop.view.backgroundColor=[UIColor clearColor];
+        
+        pop.type = 2;
+        pop.popDelegate = self.popDelegate;
+        FacetValue* facetValue=[[FacetValue alloc] init];
+        if ([[self.listData objectAtIndex:row] isKindOfClass:[NSString class]])
+        {
+            NSString *name = [self.listData objectAtIndex:row];
+            pop.title = name;
+            if ([name isEqualToString:@"品牌"])
+            {
+                pop.listData = [NSMutableArray arrayWithArray:searchBrandVO.brandChilds];
+                facetValue.nid=searchBrandVO.brandId;
+                facetValue.name=@"全部";
+                [pop.listData insertObject:facetValue atIndex:0];
+            }
+            else if ([name isEqualToString:@"价格"])
+            {
+                PriceRange*price=[[PriceRange alloc] init];
+                pop.listData=[NSMutableArray arrayWithArray:searchPriceVO.childs];
+                price.start=[NSNumber numberWithInt:0];
+                price.end=[NSNumber numberWithInt:2147483647];
+                [pop.listData insertObject:price atIndex:0];
+                [price release];
+            }
+        }else{
+            SearchAttributeVO *searchAttribut = [self.listData objectAtIndex:row];
+        
+            if (searchAttribut.attrChilds.count > 0)
+            {
+                pop.title = searchAttribut.attrName;
+                pop.listData = [NSMutableArray arrayWithArray:searchAttribut.attrChilds];
+                facetValue.nid=searchAttribut.attrId;
+                facetValue.name=@"全部";
+                [pop.listData insertObject:facetValue atIndex:0];
+            }
+        }
+            [facetValue release];
+        [self.navigationController pushViewController:pop animated:YES];
+    }
+    else{
+        UIImageView *imageView = [[[UIImageView alloc] initWithFrame:CGRectMake(200, 17,22, 19)] autorelease];
+        imageView.image = [UIImage imageNamed:@"filter_dui.png"];
+        [[tableView cellForRowAtIndexPath:indexPath] insertSubview:imageView atIndex:1];
+  
+        //获取以前筛选条件
+        NSMutableString *filterMutableString = nil;
+        NSNumber *barandId = [NSNumber numberWithInt:0];
+        NSString *priceRangeStr = @"";
+        int i = 0;
+        
+        NSArray *keys = [dataHandler.filterDic allKeys];
+        for (NSString * key in keys)
+        {
+            if (![self.title isEqualToString:key])
+            {
+                if([key isEqualToString:@"品牌"])
+                {
+                    FacetValue * facetItem = [dataHandler.filterDic objectForKey:key];
+                    barandId = facetItem.nid;
+                }
+                else if([key isEqualToString:@"价格"])
+                {
+                    PriceRange * priceItem = [dataHandler.filterDic objectForKey:key];
+                    if ([priceItem.end intValue] == 2147483647)
+                    {
+                        priceRangeStr=[NSString stringWithFormat:@"%@,",priceItem.start];
+                    }
+                    else if ([priceItem.start intValue] == 0)
+                    {
+                        priceRangeStr=[NSString stringWithFormat:@",%@",priceItem.end];
+                    }
+                    else
+                    {
+                        priceRangeStr=[NSString stringWithFormat:@"%@,%@",priceItem.start,priceItem.end];
+                    }
+                }else if ([key isEqualToString:YihaodianOnly]){
+                    
+                }
+                else
+                {
+                    FacetValue * facetItem = [dataHandler.filterDic objectForKey:key];
+                    if (i == 0)
+                    {
+                        filterMutableString = [NSMutableString stringWithCapacity:1];
+                        [filterMutableString appendFormat:@"%@", facetItem.nid];
+                    }
+                    else
+                    {
+                        [filterMutableString appendFormat:@",%@", facetItem.nid];
+                    }
+                }
+                
+                i++;
+            }
+        }
+        
+        //设置现在筛选条件
+        NSDictionary *noteDic = nil;
+        if ([[self.listData objectAtIndex:row] isKindOfClass:[FacetValue class]])
+        {
+            FacetValue *facetValue = [self.listData objectAtIndex:row];
+            if ([self.title isEqualToString:@"品牌"])
+            {
+                [popDelegate popItemSelected:facetValue.nid attribute:filterMutableString priceRange:priceRangeStr];
+            }
+            //导购属性
+            else
+            {
+                NSString *newFacetValueIds = [popDelegate attributesFilterString];
+                if (filterMutableString)
+                {
+                    newFacetValueIds=[NSString stringWithFormat:@"%@,%@",filterMutableString,[NSString stringWithFormat:@"%@", facetValue.nid]];
+                }
+                else
+                {
+                    newFacetValueIds=[NSString stringWithFormat:@"%@", facetValue.nid];
+                    if ([facetValue.name isEqualToString:@"全部"]) {
+                        newFacetValueIds=@"";
+                    }
+                }
+
+                [popDelegate popItemSelected:barandId attribute:newFacetValueIds priceRange:priceRangeStr];
+                
+            }
+            
+            noteDic=[NSDictionary dictionaryWithObjectsAndKeys:facetValue, self.title, nil];
+        }
+        //价格
+        else
+        {
+            PriceRange *priceRange = [self.listData objectAtIndex:row];
+            NSString *priceRangeStr = @"";
+            NSLog(@"%i",[priceRange.end intValue]);
+            
+            if ([priceRange.end intValue] == 2147483647)
+            {
+                priceRangeStr=[NSString stringWithFormat:@"%@,",priceRange.start];    
+            }
+            else if ([priceRange.start intValue]==0)
+            {
+                priceRangeStr=[NSString stringWithFormat:@",%@",priceRange.end];          
+            }
+            else
+            {
+                priceRangeStr=[NSString stringWithFormat:@"%@,%@",priceRange.start,priceRange.end];
+            }
+            
+            [popDelegate popItemSelected:barandId attribute:filterMutableString priceRange:priceRangeStr];
+            noteDic=[NSDictionary dictionaryWithObjectsAndKeys:priceRange, self.title, nil];
+        }
+       
+        
+        [[NSNotificationCenter defaultCenter] postNotificationName:kNotifyFilterChange object:nil userInfo:noteDic];
+        [self.navigationController popViewControllerAnimated:YES];
+    }
+    
+    
+  
+}
+
+@end

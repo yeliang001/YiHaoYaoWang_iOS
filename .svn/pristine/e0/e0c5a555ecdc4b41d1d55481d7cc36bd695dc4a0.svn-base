@@ -1,0 +1,589 @@
+//
+//  GameRecViewController.m
+//  TheStoreApp
+//
+//  Created by yuan jun on 12-11-1.
+//
+//
+
+#import "GameRecViewController.h"
+#import "GameFinishViewController.h"
+#import "UIDeviceHardware.h"
+#import "OTSWeRockService.h"
+#import "RockGameFlowVO.h"
+#import "GlobalValue.h"
+#import "OTSLoadingView.h"
+
+#define SoundStateBtnYPos ((iPhone5)?385:300)
+#define GiftImageYPos ((iPhone5)?200:80)
+#define MicImageYpos ((iPhone5)?220:180)
+
+@interface GameRecViewController ()
+@property (nonatomic, retain)   GameFinishViewController    *gameFinishVC;
+@end
+
+@implementation GameRecViewController
+@synthesize shareCellPhone,shareCellName;
+@synthesize rockGameProductVo;
+@synthesize soundBtnArray;
+@synthesize gameFinishVC = _gameFinishVC;
+
+-(void)dealloc{
+    [productImg release];
+    [volume release];
+    [soundBtnArray release];
+    [shareCellName release];
+    [rockGameProductVo release];
+    [shareCellPhone release];
+    [_gameFinishVC release];
+    
+    [super dealloc];
+}
+- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
+{
+    self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
+    if (self) {
+        // Custom initialization
+        soundBtnArray=[[NSMutableArray alloc] init];
+    }
+    return self;
+}
+
+-(void)viewWillDisappear:(BOOL)animated{
+    [super viewWillDisappear:animated];
+    [audioRecorder stopPlayRecord];
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    
+    audioRecorder=[AudioRecorder sharedAudioRecorder];
+    audioRecorder.delegate=self;
+    
+    self.naviBar.titleLabel.text=@"你送我猜";
+    bg=[[UIImageView alloc] initWithFrame:CGRectMake(0, 44, 320, self.view.frame.size.height-44)];
+    if (iPhone5) {
+        bg.image=[UIImage imageNamed:@"game5_BG2.png"];
+    }else{
+        bg.image=[UIImage imageNamed:@"game_BG2.png"];
+    }
+    [self.view addSubview:bg];
+    bg.userInteractionEnabled=YES;
+    [bg release];
+    
+    giftPic=[[UIImageView alloc] initWithFrame:CGRectMake(70, 80, 200, 200)];
+    giftPic.center=CGPointMake(160,GiftImageYPos);
+    NSString* str=rockGameProductVo.pictureUnpicked;
+    [[SDWebDataManager sharedManager] downloadWithURL:[NSURL URLWithString:str] delegate:self];
+    [bg addSubview:giftPic];
+    giftPic.userInteractionEnabled=YES;
+    [giftPic release];
+    
+    
+    for (int i=0; i<4; i++) {
+        UIButton* bu=[UIButton buttonWithType:UIButtonTypeCustom];
+        NSString* usel;
+        NSString*sel;
+        switch (i) {
+            case 0:
+            {
+                usel=@"game_origen_unsel.png";
+                sel=@"game_origen_sel.png";
+            }
+                break;
+            case 1:
+                usel=@"game_ugly_unsel.png";
+                sel=@"game_ugly_sel.png";
+                break;
+            case 2:
+                usel=@"game_uncle_unsel.png";
+                sel=@"game_uncle_sel.png";
+                break;
+            case 3:
+                usel=@"game_ufo_unsel.png";
+                sel=@"game_ufo_sel.png";
+                break;
+            default:
+                break;
+        }
+        [bu setImage:[UIImage imageNamed:usel] forState:UIControlStateNormal];
+        [bu setImage:[UIImage imageNamed:sel] forState:UIControlStateSelected];
+
+        bu.frame=CGRectMake(i*75+20, SoundStateBtnYPos, 50, 50);
+        [bg addSubview:bu];
+        bu.tag=i;
+        if (i==0) {
+            bu.selected=YES;
+        }
+        [soundBtnArray addObject:bu];
+        [bu addTarget:self action:@selector(chageAudioPro:) forControlEvents:UIControlEventTouchUpInside];
+        UILabel* typeName=[[UILabel alloc] initWithFrame:CGRectMake(i*75+20, SoundStateBtnYPos+48, 50, 20)];
+        if (i==0) {
+            typeName.text=@"原音";
+        }else if (i==1){
+            typeName.text=@"小丑";
+        }else if (i==2){
+            typeName.text=@"鸟叔";
+        }else if (i==3){
+            typeName.text=@"外星";
+        }
+        typeName.textColor=[UIColor colorWithRed:(80.0/255.0) green:(36.0/255.0) blue:(12.0/255.0) alpha:0.6];
+        typeName.textAlignment=UITextAlignmentCenter;
+        typeName.font=[UIFont systemFontOfSize:14];
+//        typeName.adjustsFontSizeToFitWidth=YES;
+        typeName.backgroundColor=[UIColor clearColor];
+        [bg addSubview:typeName];
+        [typeName release];
+        
+    }
+    [[AudioRecorder sharedAudioRecorder] changeAudioProperty:kTypeOrigen];
+    [self initBtns];
+    [self recordSwith:NO];
+    
+    [self.naviBar.leftNaviBtn addTarget:self action:@selector(naviBackAction:) forControlEvents:UIControlEventTouchUpInside];
+}
+
+#pragma mark changeSoundtype
+-(void)chageAudioPro:(UIButton*)btn{
+    if (btn.selected) {
+        return;
+    }
+    for (UIButton*b in soundBtnArray) {
+        b.selected=NO;
+    }
+    btn.selected=YES;
+    [audioRecorder stopPlayRecord];
+    playBtn.selected=NO;
+    switch (btn.tag) {
+        case 0:{
+            [[AudioRecorder sharedAudioRecorder] changeAudioProperty:kTypeOrigen];
+            timeLab.text=[NSString stringWithFormat:@"%d",[[AudioRecorder sharedAudioRecorder] getAudioDuration:[NSURL fileURLWithPath:[OTS_DOC_PATH stringByAppendingPathComponent:@"audio.aif"]]]];
+        }
+            break;
+        case 1:
+        {
+            [[AudioRecorder sharedAudioRecorder] changeAudioProperty:kTypeHappy];
+            timeLab.text=[NSString stringWithFormat:@"%d",[[AudioRecorder sharedAudioRecorder] getAudioDuration:[NSURL fileURLWithPath:[OTS_DOC_PATH stringByAppendingPathComponent:@"happy.aif"]]]];
+        }
+            break;
+        case 2:
+        {
+            [[AudioRecorder sharedAudioRecorder] changeAudioProperty:kTypeToilet];
+            timeLab.text=[NSString stringWithFormat:@"%d",[[AudioRecorder sharedAudioRecorder] getAudioDuration:[NSURL fileURLWithPath:[OTS_DOC_PATH stringByAppendingPathComponent:@"toilet.aif"]]]];
+        }
+            break;
+        case 3:
+        {
+            [[AudioRecorder sharedAudioRecorder] changeAudioProperty:kTypeSpace];
+            timeLab.text=[NSString stringWithFormat:@"%d",[[AudioRecorder sharedAudioRecorder] getAudioDuration:[NSURL fileURLWithPath:[OTS_DOC_PATH stringByAppendingPathComponent:@"space.aif"]]]];
+        }
+            break;
+        default:
+            break;
+    }
+    if ([timeLab.text intValue]) {
+        [self playAudio:playBtn];
+    }
+    [self changeAnimation];
+}
+
+-(void)changeAnimation{
+    AudioSampleType type=[AudioRecorder sharedAudioRecorder].aAudioProperty;
+    NSMutableArray* animations=[NSMutableArray array];
+    switch (type) {
+        case kTypeOrigen:
+            [animations addObject:[UIImage imageNamed:@"game_origenGif1.png"]];
+            [animations addObject:[UIImage imageNamed:@"game_origenGif2.png"]];
+            break;
+        case kTypeHappy:
+            [animations addObject:[UIImage imageNamed:@"game_ugly1.png"]];
+            [animations addObject:[UIImage imageNamed:@"game_ugly2.png"]];
+            break;
+        case kTypeToilet:
+            [animations addObject:[UIImage imageNamed:@"game_uncle1.png"]];
+            [animations addObject:[UIImage imageNamed:@"game_uncle2.png"]];
+            break;
+        case kTypeSpace:
+            [animations addObject:[UIImage imageNamed:@"game_ufo1.png"]];
+            [animations addObject:[UIImage imageNamed:@"game_ufo2.png"]];
+            break;
+        default:
+            break;
+    }
+    
+    giftPic.animationImages=animations;
+    giftPic.animationDuration=0.5;
+    if (giftPic.isAnimating) {
+        [giftPic stopAnimating];
+    }
+    [giftPic startAnimating];
+}
+
+
+
+-(void)showAnimationPic{
+    [giftPic stopAnimating];
+    AudioSampleType type=[AudioRecorder sharedAudioRecorder].aAudioProperty;
+    UIImage *img = nil;
+    switch (type) {
+        case kTypeOrigen:
+            img=[UIImage imageNamed:@"game_origenGif1.png"];
+            break;
+        case kTypeHappy:
+            img=[UIImage imageNamed:@"game_ugly1.png"];
+            break;
+        case kTypeToilet:
+           img=[UIImage imageNamed:@"game_uncle1.png"];
+            break;
+        case kTypeSpace:
+            img=[UIImage imageNamed:@"game_ufo1.png"];
+            break;
+        default:
+            break;
+    }
+    giftPic.image=img;
+}
+#pragma mark webDataManagerdelegate
+- (void)webDataManager:(SDWebDataManager *)dataManager didFinishWithData:(NSData *)aData isCache:(BOOL)isCache{
+    productImg=[[UIImage alloc] initWithData:aData];
+    giftPic.image=productImg;
+}
+
+#pragma mark --
+-(void)recordSwith:(BOOL)isRecordFinished{
+    if (isRecordFinished) {
+        recordBtn.hidden=YES;
+        reRecBtn.hidden=NO;
+        recFinishBtn.hidden=NO;
+        playBtn.hidden=NO;
+        timeLab.hidden=NO;
+    }else{
+        recordBtn.hidden=NO;
+        reRecBtn.hidden=YES;
+        recFinishBtn.hidden=YES;
+        playBtn.hidden=YES;
+        timeLab.hidden=YES;
+        timeLab.text=@"";
+    }
+}
+
+
+-(void)showRecordMic{
+    if (micImage==nil) {
+        micImage=[[UIImageView alloc] initWithFrame:CGRectMake(90, 140, 140, 140)];
+        micImage.image=[UIImage imageNamed:@"game_mic_bg.png"];
+        [self.view addSubview:micImage];
+        micImage.userInteractionEnabled=YES;
+        [micImage release];
+        
+        UIImageView*micImg=[[UIImageView alloc] initWithFrame:CGRectMake(0, 0, 140, 140)];
+        micImg.image=[UIImage imageNamed:@"game_mic.png"];
+        [micImage addSubview:micImg];
+        [micImg release];
+
+        if (volume==nil) {
+            volume=[[GameProgressView alloc] initWithMaxImage:[UIImage imageNamed:@"game_speaker_min.png"] MinImage:[UIImage imageNamed:@"game_speaker_max.png"] Frame:CGRectMake(20,105 , 98, 8)];
+            [micImage addSubview:volume];
+            [volume setProgress:0.0];
+        }
+        UILabel* limit=[[UILabel alloc] initWithFrame:CGRectMake(10, 115, 120, 20)];
+        limit.backgroundColor=[UIColor clearColor];
+        limit.textColor=[UIColor whiteColor];
+        limit.adjustsFontSizeToFitWidth=YES;
+        limit.text=@"录音限制在10秒内";
+        [micImage addSubview:limit];
+        [limit release];
+    }
+    else{
+        micImage.hidden=NO;
+    }
+}
+
+
+-(void)initBtns{
+    
+    timeLab=[[UILabel alloc] initWithFrame:CGRectMake(250, 200, 80, 30)];
+    timeLab.backgroundColor=[UIColor clearColor];
+    timeLab.textColor=[UIColor colorWithRed:(80.0/255.0) green:(36.0/255.0) blue:(12.0/255.0) alpha:0.6];
+    [bg addSubview:timeLab];
+    [timeLab release];
+    
+    playBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    playBtn.frame=CGRectMake(250, 230, 38, 38);
+    [playBtn addTarget:self action:@selector(playAudio:) forControlEvents:UIControlEventTouchUpInside];
+    [playBtn setBackgroundImage:[UIImage imageNamed:@"game_playBtn.png"] forState:UIControlStateNormal];
+    [playBtn setBackgroundImage:[UIImage imageNamed:@"game_stopBtn.png"] forState:UIControlStateSelected];
+    [bg addSubview:playBtn];
+    
+    recordBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    recordBtn.frame=CGRectMake(90, bg.frame.size.height-7-36, 133, 36);
+    [recordBtn setImage:[UIImage imageNamed:@"game_record.png"] forState:UIControlStateNormal];
+    [recordBtn setImage:[UIImage imageNamed:@"game_record_touched.png"] forState:UIControlStateHighlighted];
+    [recordBtn addTarget:self action:@selector(recordBegin) forControlEvents:UIControlEventTouchDown];
+    [recordBtn addTarget:self action:@selector(recordFinish) forControlEvents:UIControlEventTouchUpInside|UIControlEventTouchUpOutside];
+    [bg addSubview:recordBtn];
+    
+    
+    recFinishBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    [recFinishBtn setImage:[UIImage imageNamed:@"game_next.png"] forState:UIControlStateNormal];
+    [recFinishBtn setImage:[UIImage imageNamed:@"game_next_touched.png"] forState:UIControlStateHighlighted];
+    [recFinishBtn addTarget:self action:@selector(recordOk) forControlEvents:UIControlEventTouchUpInside];
+    recFinishBtn.frame=CGRectMake(153, bg.frame.size.height-7-36, 133, 36);
+    [bg addSubview:recFinishBtn];
+    
+    reRecBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    [reRecBtn setImage:[UIImage imageNamed:@"game_rerecord.png"] forState:UIControlStateNormal];
+    [reRecBtn setImage:[UIImage imageNamed:@"game_rerecord_touched.png"] forState:UIControlStateHighlighted];
+    reRecBtn.frame=CGRectMake(20, bg.frame.size.height-7-36, 133, 36);
+    [reRecBtn addTarget:self action:@selector(reRecord) forControlEvents:UIControlEventTouchUpInside];
+    [bg addSubview:reRecBtn];
+
+}
+-(long)createRockGameFlow:(NSString*)audioPath{
+    RockGameFlowVO*flowVo=[[RockGameFlowVO alloc] init];
+    /*创建对象*/
+    flowVo.userId=rockGameVO.userId;
+    flowVo.rockGameId=rockGameVO.nid;
+    flowVo.provinceId=[GlobalValue getGlobalValueInstance].provinceId;
+    flowVo.inviteePhone=shareCellPhone;
+    flowVo.inviteeName=shareCellName;
+    flowVo.presentId=rockGameProductVo.nid;
+    flowVo.audioUrl=audioPath;
+    flowVo.couponId=rockGameProductVo.couponId;
+    /*
+     @property (retain)  NSNumber    *provinceId;        // 用户当前省份ID （必须设置，当前用户登录的省份ID）
+     @property (copy)    NSString    *inviteePhone;      // 被邀请者的电话
+     @property (copy)    NSString    *inviteeName;       // 被邀请者的名称
+     @property (retain)  NSNumber    *presentId;         // 赠送游戏礼品的ID（必须设置，RockGameProductVO对象的ID）
+     @property (copy)    NSString    *audioUrl;          // 音频上传的路径 （必须设置，RockGameProductVO对象的ID）
+     @property (retain)  NSNumber    *flowStatus;        // 流程状态：1-已完成；0-未完成 (不设置，创建默认状态为0）
+     @property (retain)  NSNumber    *couponId;          // 获取抵用券的ID：一个用户最多只能获取4个 （必须设置，RockGameProductVO对象的couponId）
+     
+     */
+    NSString*token=[GlobalValue getGlobalValueInstance].token;
+    long result=[[OTSWeRockService myInstance] createRockGameFlow:token rockGameFlowVO:flowVo];
+    [flowVo release];
+    return result;
+}
+-(NSString*)uploadSoundWithPath:(NSString*)aSoundFilePath
+{
+    NSData *postData = [NSData dataWithContentsOfFile:aSoundFilePath];
+    if (postData == nil)
+    {
+        return nil;
+    }
+    NSString*pathExtens=[aSoundFilePath pathExtension];
+    NSString* addrPath=[NSString stringWithFormat:@"http://m.yihaodian.com/mw/uploadAction?type=%@",pathExtens];
+    NSURL *url = [NSURL URLWithString:addrPath];
+    
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
+    [req setHTTPMethod:@"POST"];
+    [req addValue:@"text/html" forHTTPHeaderField:@"Content-Type"];
+    [req setHTTPBody:postData];
+    
+    NSHTTPURLResponse* response = nil;
+    NSError *error = nil;
+    NSData *responseData = [NSURLConnection sendSynchronousRequest:req returningResponse:&response error:&error];
+    
+    if (error || responseData == nil || response.statusCode != 200)
+    {
+        DebugLog(@"%d===%@",[error code],[error localizedDescription]);
+        return nil;
+        
+    }
+    
+    NSString *responseString = [[[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding] autorelease];
+    return responseString;
+}
+-(void)uploadRecord{
+    @autoreleasepool {
+        NSString*soundpath;
+        KTypeAudioProperty type=[AudioRecorder sharedAudioRecorder].aAudioProperty;
+        switch (type) {
+            case kTypeOrigen:
+                soundpath=[OTS_DOC_PATH stringByAppendingPathComponent:@"audio.aif"];
+                break;
+            case kTypeHappy:
+                soundpath=[OTS_DOC_PATH stringByAppendingPathComponent:@"happy.aif"];
+                break;
+            case kTypeToilet:
+                soundpath=[OTS_DOC_PATH stringByAppendingPathComponent:@"toilet.aif"];
+                break;
+            case kTypeSpace:
+                soundpath=[OTS_DOC_PATH stringByAppendingPathComponent:@"space.aif"];
+                break;
+            default:
+                break;
+        }
+        NSString* response=[self uploadSoundWithPath:soundpath];
+        if (response==nil){
+            [self performSelectorOnMainThread:@selector(showError:) withObject:@"录音上传失败，请重试" waitUntilDone:NO];
+        } else{
+            NSString*secs=[timeLab.text stringByReplacingOccurrencesOfString:@"'" withString:@""];
+            NSString* uploadUrl=[response stringByAppendingFormat:@"#%@",secs] ;
+            DebugLog(@"%@",uploadUrl);
+            gameFlowId=[self createRockGameFlow:uploadUrl];
+            if (gameFlowId>0) {
+                [self performSelectorOnMainThread:@selector(sendSMS:) withObject:[NSString stringWithFormat:@"%@",[NSNumber numberWithLong:gameFlowId]] waitUntilDone:NO];
+            }else{
+                [self performSelectorOnMainThread:@selector(showError:) withObject:@"游戏创建失败!" waitUntilDone:NO];
+            }
+        }
+    }
+}
+
+-(void)showError:(NSString*)errorInfo{
+    DebugLog(@"uploadFailed");
+    [self.loadingView hide];
+    UIAlertView*al=[[UIAlertView alloc] initWithTitle:nil message:errorInfo delegate:self cancelButtonTitle:@"确定" otherButtonTitles: nil];
+    [al show];
+    [al release];
+}
+
+-(void)toFinishView{
+    self.gameFinishVC = [[[GameFinishViewController alloc] init] autorelease];
+//    rec.postImg=productImg;
+    self.gameFinishVC.postText=[NSString stringWithFormat:@"我壮烈献声给你换来的1号店的免费礼包，快去抢"];
+    self.gameFinishVC.postUrl=[NSString stringWithFormat:@"http://m.yihaodian.com/mw/guess/%@",[NSNumber numberWithLong:gameFlowId]];
+    [self pushVC:self.gameFinishVC animated:NO fullScreen:YES];
+}
+#pragma mark sms&delegate
+-(void)sendSMS:(NSString*)content{
+    DebugLog(@"upload success");
+    [self.loadingView hide];
+    MFMessageComposeViewController *controller = [[[MFMessageComposeViewController alloc] init] autorelease];
+    controller.body = [NSString stringWithFormat:@"我壮烈献声给你换来的1号店的免费礼包，快去抢！http://m.yihaodian.com/mw/guess/%@",content];
+    controller.recipients=[NSArray arrayWithObject:shareCellPhone];
+    controller.messageComposeDelegate = self;
+    [self presentModalViewController:controller animated:YES];
+}
+
+- (void)messageComposeViewController:(MFMessageComposeViewController *)controller didFinishWithResult:(MessageComposeResult)result
+{
+    [controller dismissModalViewControllerAnimated:YES];//关键的一句   不能为YES
+	switch ( result ) {
+        case MessageComposeResultCancelled:
+        {
+//            [self toFinishView];
+        }
+            break;
+		case MessageComposeResultFailed:// send failed
+        {
+            UIAlertView* al=[[UIAlertView alloc] initWithTitle:nil message:@"邀请发送失败，请重试" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles: nil];
+            [al show];
+            [al release];
+        }
+			break;
+		case MessageComposeResultSent:
+		{
+            [self toFinishView];
+            UIAlertView* al=[[UIAlertView alloc] initWithTitle:nil message:@"邀请发送成功" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles: nil];
+            [al show];
+            [al release];
+		}
+			break;
+		default:
+			break;
+	}
+    
+}
+-(void)naviBackAction:(id)sender
+{
+    [self popSelfAnimated:YES];
+}
+
+#pragma mark buttons Action
+-(void)recordOk{
+    if (playBtn.selected) {
+        [self playAudio:playBtn];
+    }
+    [self.loadingView showInView:self.view title:@"音频上传中"];
+    [self otsDetatchMemorySafeNewThreadSelector:@selector(uploadRecord) toTarget:self withObject:nil];
+}
+-(void)reRecord{
+    [audioRecorder clearRecordTemp];
+    [self recordSwith:NO];
+    recordFinished=NO;
+    [giftPic stopAnimating];
+    giftPic.image=productImg;
+    if (playBtn.selected) {
+        [self playAudio:playBtn];
+        giftPic.image=productImg;
+    }
+}
+
+-(void)playAudio:(UIButton*)buuton{
+    if (buuton.selected) {
+        [audioRecorder stopPlayRecord];
+        buuton.selected=NO;
+        [self showAnimationPic];
+    }
+    else{
+        [audioRecorder playRecord];
+        buuton.selected=YES;
+        [self changeAnimation];
+    }
+}
+
+-(void)recordFinish{
+    micImage.hidden=YES;
+    [audioRecorder listenerStop];
+    [self recordSwith:YES];
+}
+-(void)recordBegin{
+    [audioRecorder listenerStart];
+    [self showRecordMic];
+    rec2Short=NO;
+    rec2Long=NO;
+}
+#pragma mark delegate
+-(void)audioRecorderTooShort{
+    [audioRecorder listenerStop];
+    rec2Short=YES;
+    [self recordSwith:NO];
+    [self.loadingView showInView:self.view title:@"没有检测到声音，请重新录制" autoDismiss:YES indicateActivity:NO offsetY:0];
+}
+
+-(void)audioRecorderTimeOut{
+    rec2Long=YES;
+}
+
+-(void)beginMix{
+    [self.loadingView showInView:self.view title:@"处理录音中"];
+}
+-(void)finishMix{
+    [self.loadingView hide];
+    UIButton*tempBtn=[soundBtnArray objectAtIndex:0];
+    if (!tempBtn.selected) {
+        [self chageAudioPro:tempBtn];
+        recordFinished=YES;
+        [self changeAnimation];
+    }else{
+        if (!rec2Short) {
+            [self playAudio:playBtn];
+            recordFinished=YES;
+            [self changeAnimation];
+
+        }
+    }
+}
+-(void)audioRecorderPlayFinished{
+    playBtn.selected=NO;
+    [self showAnimationPic];
+}
+-(void)audioRecorder:(AudioRecorder *)recorder duration:(int)duration{
+    timeLab.text=[NSString stringWithFormat:@"%d\'",duration];
+}
+
+-(void)audioRecorder:(AudioRecorder *)recorder SLpower:(Float32)power{
+    DebugLog(@"声音声音%f",power);
+    [volume setProgress:power];
+}
+- (void)didReceiveMemoryWarning
+{
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+@end

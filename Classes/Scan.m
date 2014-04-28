@@ -1,0 +1,326 @@
+//
+//  Scan.m
+//  TheStoreApp
+//
+//  Created by jiming huang on 11-12-28.
+//  Copyright (c) 2011年 __MyCompanyName__. All rights reserved.
+//
+
+#import "Scan.h"
+#import "DeviceUtil.h"
+#import "GlobalValue.h"
+#import "TheStoreAppAppDelegate.h"
+#import <QuartzCore/QuartzCore.h>
+#import "Trader.h"
+#import "ProductVO.h"
+#import "OTSAlertView.h"
+#import "OTSAudioPlayer.h"
+#import "OTSProductDetail.h"
+#import "ProductService.h"
+#import "DoTracking.h"
+#import "YWProductService.h"
+
+@implementation Scan
+
+@synthesize celebrateWebUrl;
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    
+    barcodeRuning=YES;
+    m_LoadingView=[[OTSLoadingView alloc] init];
+    [self enterScan];
+    
+    JSTrackingPrama* prama = [[[JSTrackingPrama alloc]initWithJSType:EJStracking_Scan extraPrama:nil]autorelease];
+    [DoTracking doJsTrackingWithParma:prama];
+}
+
+-(void)enterScan
+{
+    if ([DeviceUtil supportCarmera]==NO) {
+        [[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+        UIAlertView *alert=[[OTSAlertView alloc]initWithTitle:@"扫描无法使用" message:@"当前设备不支持扫描功能" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
+		[alert show];
+		[alert release];
+    } else {//扫描界面
+		[UIView setAnimationsEnabled:NO];
+        if (closedCamer!=nil) {
+            [closedCamer release];
+        }
+		closedCamer=[ZBarReaderViewController new];
+		closedCamer.showsZBarControls=NO;
+        closedCamer.tracksSymbols=NO;
+        closedCamer.readerDelegate=self;
+		[closedCamer.scanner setSymbology:ZBAR_I25 config:ZBAR_CFG_ENABLE to:0];
+        //背景
+        UIImageView *imageView=[[UIImageView alloc] initWithFrame:CGRectMake(0, 0, 320, ScreenHeight)];
+        [imageView setImage:[UIImage imageNamed:@"scan_main_bg.png"]];
+        [imageView setAlpha:0.9];
+        [closedCamer.view addSubview:imageView];
+        [imageView release];
+        //取消按钮
+        if (cancelBtnInBarcode!=nil) {
+            [cancelBtnInBarcode release];
+        }
+		cancelBtnInBarcode=[[UIButton alloc] initWithFrame:CGRectMake(10, 20, 50, 30)];
+		[cancelBtnInBarcode setBackgroundImage:[UIImage imageNamed:@"scan_return_btn.png"] forState:UIControlStateNormal];
+		[cancelBtnInBarcode addTarget:self action:@selector(cancelButClicked:) forControlEvents:1];
+		[closedCamer.view addSubview:cancelBtnInBarcode];
+        //红线
+        m_RedLine=[[UIImageView alloc] initWithFrame:CGRectMake(48, 238, 224, 4)];
+        [m_RedLine setImage:[UIImage imageNamed:@"scan_redline.png"]];
+        [m_RedLine setAlpha:0.8];
+        [closedCamer.view addSubview:m_RedLine];
+        
+        TheStoreAppAppDelegate *delegate=(TheStoreAppAppDelegate*)([UIApplication sharedApplication].delegate);
+		[[delegate tabBarController] presentModalViewController:closedCamer animated:YES];
+	}
+}
+
+#pragma mark 取消扫描
+-(IBAction)cancelButClicked:(id)Sender {
+	[closedCamer dismissModalViewControllerAnimated:YES];
+    [self removeSelf];
+}
+
+#pragma mark 摄像头的回调方法
+- (void)imagePickerController:(UIImagePickerController*)reader didFinishPickingMediaWithInfo:(NSDictionary*)info {
+    [OTSAudioPlayer playSoundFileInBundle:@"scan" type:@"mp3"];
+    
+    [m_RedLine removeFromSuperview];
+    
+    id<NSFastEnumeration> results=[info objectForKey:ZBarReaderControllerResults];
+    for (ZBarSymbol *symbol in results) {
+        cancelBtnInBarcode.enabled=NO;
+        if (barcodeRuning==NO) {
+            return;
+        }
+        barcodeRuning=NO;
+        
+        DebugLog(@"扫瞄结果 ：%@",symbol.data);
+        
+		if ([[[symbol.data substringToIndex:4] lowercaseString] isEqualToString:@"http"])
+        {//扫描到二维码url
+            [m_LoadingView showInView:reader.view title:@"扫描成功，加载中..."];
+            [m_LoadingView hide];
+            if (closedCamer!=nil) {
+                [closedCamer dismissModalViewControllerAnimated: YES];
+                [closedCamer release];
+                closedCamer=nil;
+            }
+            //扫描扫出的URL需要加/30/省份ID, 区分是否有tracker的情况
+            NSArray *components=[symbol.data componentsSeparatedByString:@"?"];
+            if ([components count] == 2 ) {
+                NSString * _baseurl = [components objectAtIndex:0];
+                NSString * _tracker = [components objectAtIndex:1];
+                celebrateWebUrl = [_baseurl stringByAppendingFormat:@"/30/%@?%@",[GlobalValue getGlobalValueInstance].provinceId,_tracker];
+            }
+            else if([components count] == 1)
+            {
+                NSString * _baseurl = [components objectAtIndex:0];
+                celebrateWebUrl = [_baseurl stringByAppendingFormat:@"/30/%@",[GlobalValue getGlobalValueInstance].provinceId];
+            }
+            else
+            {
+                celebrateWebUrl = @"";
+            }
+            DebugLog(@"==========%@",celebrateWebUrl);
+	        
+			CATransition *animation = [CATransition animation]; 
+			animation.duration = 0.3f;
+			animation.timingFunction = UIViewAnimationCurveEaseInOut;
+			[animation setType:kCATransitionPush];
+			[animation setSubtype: kCATransitionFromRight];
+			[self.view.superview.layer addAnimation:animation forKey:@"Reveal"];
+            barcodeRuning = YES;
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"ToCelebrateViewNotification" object:celebrateWebUrl];
+			
+		} else //扫描到条码
+        {
+            [m_LoadingView showInView:reader.view title:@"扫描成功，搜索中..."];
+            
+            //扫描到二维码PID
+            int searchIndex = 4;
+            if ([[[symbol.data substringToIndex:3] uppercaseString] isEqualToString:@"PID"]
+                && symbol.data.length > searchIndex)
+            {
+                NSRange range = [[symbol.data substringFromIndex:searchIndex] rangeOfString:@"_"];
+                
+                if (range.location > searchIndex)
+                {
+                    NSString *unionStr = [symbol.data substringWithRange:NSMakeRange(searchIndex, range.location)];
+                    [[GlobalValue getGlobalValueInstance].trader setUnionKey:unionStr];
+                }
+            }
+//            [self toSearchByBarcode:symbol.data];
+            
+			[self otsDetatchMemorySafeNewThreadSelector:@selector(toSearchByBarcode:) toTarget:self withObject:symbol.data];
+		}
+        
+        break;
+	}
+}
+
+
+#pragma mark 用扫描出来的条码搜索
+-(void)toSearchByBarcode:(NSString *)barCode
+{
+    
+    NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
+    YWProductService *pServ=[[YWProductService alloc] init];
+    ProductInfo *tempProductVO = nil;
+    @try {
+        NSDictionary *param;
+        if (barCode)
+        {
+            param = @{@"barcode":barCode, @"flag":@"5"};
+        }
+
+        tempProductVO = [pServ getProductDetail:param]; 
+    }
+    @catch (NSException *exception) {
+    }
+    @finally {
+
+        if (tempProductVO!=nil && ![tempProductVO isKindOfClass:[NSNull class]] /*&& tempProductVO.name!=nil && ![tempProductVO.name isEqualToString:@""]*/)
+        {
+            //去详情页
+//            [self showProductDetail:barCode];
+            [self performSelectorOnMainThread:@selector(showProductDetail:) withObject:barCode waitUntilDone:NO];
+
+        }
+        else
+        {
+//没有商品
+            [self performSelectorOnMainThread:@selector(barcodeSearchResultShow:) withObject:barCode waitUntilDone:NO];
+//            [self performSelectorOnMainThread:@selector(showNotFindProduct) withObject:nil waitUntilDone:NO];
+        }
+    }
+    [pServ release];
+    [pool drain];
+
+    
+    
+    
+
+    
+    
+    /* 1号店 扫瞄出来的后 要通过搜索 获取商品  药网直接当做productId 去显示
+     
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+	ProductService *tempSer = [[ProductService alloc]init];
+    NSArray * tempArray = [tempSer getProductByBarcode:[GlobalValue getGlobalValueInstance].trader 
+                                               barcode:barCode 
+                                            provinceId:[GlobalValue getGlobalValueInstance].provinceId];
+    if (resultBarcodeAry!=nil) {
+        [resultBarcodeAry release];
+    }
+    if (tempArray!=nil && ![tempArray isKindOfClass:[NSNull class]]){
+        resultBarcodeAry=[[NSArray alloc] initWithArray:tempArray];
+    } else {
+        resultBarcodeAry=nil;
+    }
+    
+    DebugLog(@"===========%d",[resultBarcodeAry count]);
+    
+    if (barcodeStr!=nil) {
+        [barcodeStr release];
+    }
+	barcodeStr = [barCode retain];
+	[self performSelectorOnMainThread:@selector(barcodeSearchResultShow) withObject:nil waitUntilDone:NO];
+    [tempSer release];
+    [pool drain];*/
+}
+
+// 去详情页展示
+
+- (void)showProductDetail:(NSString *)barCode
+{
+    [m_LoadingView hide];
+    //扫描到单个商品，进入商品详情
+    OTSProductDetail *productDetail=[[[OTSProductDetail alloc] initWithBarcode:barCode fromTag:PD_FROM_SCAN] autorelease];
+    [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+    [self pushVC:productDetail animated:YES];
+    
+    if (closedCamer!=nil)
+    {
+        [closedCamer dismissModalViewControllerAnimated: YES];
+        [closedCamer release];
+        closedCamer=nil;
+    }
+    barcodeRuning=YES;
+}
+
+#pragma mark 条码扫描结果显示
+-(void)barcodeSearchResultShow:(NSString *)codeStr
+{
+    
+    //现在用于显示无数据
+    [m_LoadingView hide];
+	
+//	if (resultBarcodeAry!=nil && ![resultBarcodeAry isKindOfClass:[NSNull class]] && [resultBarcodeAry count]==1)
+//    {
+//        //扫描到单个商品，进入商品详情
+//		ProductVO *productVO=(ProductVO *)[resultBarcodeAry objectAtIndex:0];
+//        OTSProductDetail *productDetail=[[[OTSProductDetail alloc] initWithProductId:[productVO.productId longValue] promotionId:productVO.promotionId fromTag:PD_FROM_SCAN] autorelease];
+//        [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+//        [self pushVC:productDetail animated:YES];
+//	}
+//    else
+//    {
+        //扫描到多个商品或无商品
+		ScanResult *scanResult=[[[ScanResult alloc] initWithNibName:@"ScanResult" bundle:nil] autorelease];
+    
+        NSMutableDictionary *mDictionary=[[NSMutableDictionary alloc] init];
+//        [mDictionary setObject:[NSArray arrayWithArray:resultBarcodeAry] forKey:@"Products"];
+        [mDictionary setObject:[NSString stringWithString:codeStr] forKey:@"BarCode"];
+        [scanResult setM_InputDictionary:mDictionary];
+        [mDictionary release];
+		[self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+        [self pushVC:scanResult animated:NO];
+//	}*/
+    if (closedCamer!=nil) {
+        [closedCamer dismissModalViewControllerAnimated: YES];
+        [closedCamer release];
+        closedCamer=nil;
+    }
+    barcodeRuning=YES;
+}
+
+-(void)releaseMyResource
+{
+    if (closedCamer!=nil) {
+        [closedCamer dismissModalViewControllerAnimated:YES];
+        [closedCamer release];
+        closedCamer = nil;
+    }
+    if (cancelBtnInBarcode!=nil) {
+        [cancelBtnInBarcode release];
+        cancelBtnInBarcode=nil;
+    }
+    if (resultBarcodeAry!=nil) {
+        [resultBarcodeAry release];
+        resultBarcodeAry=nil;
+    }
+    if (barcodeStr!=nil) {
+        [barcodeStr release];
+        barcodeStr=nil;
+    }
+    if (m_RedLine!=nil) {
+        [m_RedLine release];
+        m_RedLine=nil;
+    }
+}
+
+-(void)viewDidUnload
+{
+    [self releaseMyResource];
+    [super viewDidUnload];
+}
+
+-(void)dealloc
+{
+    [self releaseMyResource];
+    [super dealloc];
+}
+@end

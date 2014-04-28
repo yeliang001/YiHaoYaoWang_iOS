@@ -1,0 +1,27 @@
+//
+//  PromotionViewController.h
+//  TheStoreApp
+//
+//  Created by yuan jun on 12-10-26.
+//
+//
+
+#import <UIKit/UIKit.h>
+#import "RedemptionListViewController.h"
+@interface PromotionViewController : OTSBaseViewController<UITableViewDataSource,UITableViewDelegate,RedemptionSelectedDelegate>
+{
+    UITableView*giftTable;
+    UITableView*cutoffTable;
+    NSMutableArray* giftArray,*selectedGiftArray;//传入参数
+    UIButton*cutoffBtn,*giftBtn;
+    BOOL isCutoffShow;
+    NSMutableArray* currentSelectdGiftArray;
+    NSMutableArray* redemptionArray,*currentRedemptionArray,*selRedemptArray;
+    UIView*segmentView;
+    BOOL hasPassedData;
+    NSMutableArray* cartProductArray;
+}
+@property(nonatomic,assign)BOOL hasPassedData;
+@property(nonatomic,retain)NSMutableArray* giftArray,*selectedGiftArray,*redemptionArray,*selRedemptArray,*cartProductArray;
+@property(nonatomic,assign)BOOL isCutoffShow;
+@end

@@ -1,0 +1,494 @@
+//
+//  OTSMaterialFLowVC.m
+//  TheStoreApp
+//
+//  Created by yiming dong on 12-7-6.
+//  Copyright (c) 2012年 __MyCompanyName__. All rights reserved.
+//
+
+#import "OTSMaterialFLowVC.h"
+#import "OTSProductThumbScrollView.h"
+#import "OTSUtil.h"
+#import "OTSNaviAnimation.h"
+#import "OTSMFInfoButton.h"
+#import "OTSMfStackLabel.h"
+#import "OTSImagedLabel.h"
+#import "OTSMfQueryItemView.h"
+#import <QuartzCore/QuartzCore.h>
+#import "OrderV2.h"
+#import "OrderItemVO.h"
+#import "ProductVO.h"
+#import "OrderStatusTrackVO.h"
+#import "OTSMfServant.h"
+#import "TheStoreAppAppDelegate.h"
+#import "OTSLoadingView.h"
+#import "OTSOrderMfVC.h"
+#import "OTSMfImageCache.h"
+#import "MyOrder.h"
+#import "GlobalValue.h"
+#import "OTSTablePullToLoadView.h"
+#import "OTSNavigationBar.h"
+#import "OTSBadgeView.h"
+#import "GTMBase64.h"
+#import "DoTracking.h"
+
+typedef enum _EOtsMfRequestType
+{
+    KOtsMfRequestOrderList = 0
+    , KOtsMfrequestOrderDetailForCurrentPage
+    , KOtsMfRequestAllSubOrderStatus
+    //
+}EOtsMfRequestType;
+
+
+#define TIP_VIEW_TAG        OTS_MAGIC_TAG_NUMBER + 1
+#define FOOTER_VIEW_TAG     OTS_MAGIC_TAG_NUMBER + 2
+
+@interface OTSMaterialFLowVC ()
+//- (void)makeLoadMoreViewVisible:(BOOL)aIsVisible;
+-(void)requestAsync:(id)aRequestObj;
+-(void)requestAsync:(id)aRequestObj showLoading:(BOOL)aShowLoading;
+//-(void)updateLoadMoreView;
+@end 
+
+
+@implementation OTSMaterialFLowVC
+@synthesize testNib, servant, tv;
+
+#pragma mark -
+
+-(void)requestOrderListShowLoading:(BOOL)aShowLoading
+{
+    [self requestAsync:[NSNumber numberWithInt:KOtsMfRequestOrderList] showLoading:aShowLoading];
+}
+
+-(void)navigateBackAction
+{
+	HomePage *homePage = [SharedDelegate.tabBarController.viewControllers objectAtIndex:0];
+	[homePage setUniqueScrollToTopFor:homePage->m_ScrollView];
+    [self.view.superview.layer addAnimation:[OTSNaviAnimation animationPushFromLeft] forKey:@"Reveal"];
+    [self removeSelf];
+}
+
+
+#pragma mark -
+-(void)assembleSubViews
+{
+    OTSNavigationBar* naviBar = [[[OTSNavigationBar alloc] initWithTitle:@"物流查询" 
+                                                               backTitle:@"返回" 
+                                                              backAction:@selector(navigateBackAction) 
+                                                        backActionTarget:self] autorelease];
+    
+    [self.view addSubview:naviBar];
+    
+    // iphone5适配 - dym
+    CGRect rc = self.view.frame;
+    rc.origin.y = OTS_IPHONE_NAVI_BAR_HEIGHT;
+    rc.size.height = self.view.frame.size.height -  OTS_IPHONE_NAVI_BAR_HEIGHT;
+    tv.frame = rc;
+    
+    self.tv = [[[OTSPullTableView alloc] initWithFrame:rc style:UITableViewStylePlain] autorelease];
+    tv.backgroundColor = [UIColor colorWithRed:240.0/255 green:240.0/255 blue:240.0/255 alpha:1.0];
+    tv.delegate = self;
+    tv.dataSource = self;
+    tv.separatorStyle = UITableViewCellSeparatorStyleNone;
+    //tv.showsVerticalScrollIndicator = NO;
+    [self.view addSubview:tv];
+    
+    
+    // tip view when there is no material flow
+    UIView* tipView = [[[UIView alloc] initWithFrame:rc] autorelease];
+    tipView.backgroundColor = [UIColor whiteColor];
+    tipView.tag = TIP_VIEW_TAG;
+    tipView.hidden = YES;
+    [self.view addSubview:tipView];
+    
+    // empty image view
+    UIImage* fmEmptyImg = [UIImage imageNamed:@"mf_empty"];
+    UIImageView* fmEmptyIV = [[[UIImageView alloc] initWithImage:fmEmptyImg] autorelease];
+    fmEmptyIV.frame = CGRectMake((tipView.frame.size.width - fmEmptyImg.size.width) / 2
+                                 , 100
+                                 , fmEmptyImg.size.width
+                                 , fmEmptyImg.size.height);
+    [tipView addSubview:fmEmptyIV];
+    
+    // label
+    CGRect tipLblRc = tipView.bounds;
+    tipLblRc.origin.x += 50;
+    tipLblRc.size.width -= 100;
+    tipLblRc.origin.y = CGRectGetMaxY(fmEmptyIV.frame) + 20;
+    tipLblRc.size.height = 70;
+    UILabel* tipLabel = [[[UILabel alloc] initWithFrame:tipLblRc] autorelease];
+    tipLabel.backgroundColor = [UIColor clearColor];
+    tipLabel.textColor = [UIColor lightGrayColor];
+    tipLabel.font = [UIFont boldSystemFontOfSize:16.f];
+    tipLabel.numberOfLines = 10;
+    tipLabel.text = @"目前没有已发货订单，了解更\n多订单信息，可以到我的订单\n中查看～";
+    [tipLabel sizeToFit];
+    [tipView addSubview:tipLabel];
+    
+    // button
+    UIButton* myOrderBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+    float btnW = 90;
+    float btnH = 40;
+    myOrderBtn.frame = CGRectMake((tipView.frame.size.width - btnW) / 2, CGRectGetMaxY(tipLblRc) + 5, btnW, btnH);
+    [myOrderBtn setTitle:@"我的订单" forState:UIControlStateNormal];
+    myOrderBtn.titleLabel.font = [UIFont systemFontOfSize:16.f];
+    
+    [myOrderBtn setTitleColor:[UIColor grayColor] forState:UIControlStateNormal];
+    [myOrderBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateHighlighted];
+    UIImage* btnBgImg = [UIImage imageNamed:@"gray_btn.png"];// stretchableImageWithLeftCapWidth:10.0 topCapHeight:10.];
+    [myOrderBtn setBackgroundImage:btnBgImg forState:UIControlStateNormal];
+    //[myOrderBtn setBackgroundImage:btnBgImg forState:UIControlStateHighlighted];
+    [myOrderBtn addTarget:self action:@selector(gotoMyOrderAction) forControlEvents:UIControlEventTouchUpInside];
+    [tipView addSubview:myOrderBtn];
+    
+    //loadingMoreLabel = [[LoadingMoreLabel alloc] initWithFrame:CGRectMake(0, 0, 320, 40)];
+}
+
+-(void)gotoMyOrderAction
+{
+    MyOrder* myOrderVC = [[[MyOrder alloc]initWithNibName:@"MyOrder" bundle:nil] autorelease];
+    [[GlobalValue getGlobalValueInstance] setToOrderFromPage:[NSNumber numberWithInt:0]];
+
+    [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+    [self.view addSubview:myOrderVC.view];
+}
+-(void)toGroupTrack{
+    // 对 token 进行base64加密
+    NSData *b64TokenData = [GTMBase64 encodeData:[[GlobalValue getGlobalValueInstance].token dataUsingEncoding:NSUTF8StringEncoding]];
+    NSString* b64TokenStr = [[[NSString alloc] initWithData:b64TokenData encoding:NSUTF8StringEncoding] autorelease];
+    
+    NSString* urlStr = [NSString stringWithFormat:@"http://m.1mall.com/mw/ordertracklist/1/%@/30/1/2/2",b64TokenStr];
+    DebugLog(@"the url is:%@",urlStr);
+    [SharedDelegate enterWap:2 invokeUrl:urlStr isClearCookie:YES];
+}
+
+#pragma mark -
+-(void)requestAsync:(id)aRequestObj showLoading:(BOOL)aShowLoading
+{
+    if (aShowLoading)
+    {
+        [[OTSGlobalLoadingView sharedInstance] showInView:self.view];
+    }
+    
+    // 开线程
+    [self otsDetatchMemorySafeNewThreadSelector:@selector(threadMain:) 
+                                       toTarget:self 
+                                     withObject:aRequestObj];
+    
+}
+
+-(void)requestAsync:(id)aRequestObj
+{
+    [self requestAsync:aRequestObj showLoading:YES]; 
+}
+
+-(void)threadMain:(id)aRequestObj
+{
+    int requestType = [aRequestObj intValue];
+    switch (requestType)
+    {
+        case KOtsMfRequestOrderList:
+        {
+            if (!servant.isRequesting) 
+            {
+                [servant requestOrderListPaged];
+            }
+        }
+            break;
+            
+        default:
+            break;
+    }
+    
+    [self performSelectorOnMainThread:@selector(updateUIAfterAction:) withObject:aRequestObj waitUntilDone:YES];
+}
+
+-(void)updateUIAfterAction:(id)aRequestObj
+{
+    int requestType = [aRequestObj intValue];
+    switch (requestType)
+    {
+        case KOtsMfRequestOrderList:
+        { 
+            [[OTSGlobalLoadingView sharedInstance] hide];
+            if ([servant hasOrder] || servant.totalGroupOrderCount > 0)
+            {
+                [tv reloadData];
+            }
+            else
+            {
+                [self.view viewWithTag:TIP_VIEW_TAG].hidden = NO;
+            }
+        }
+            break;
+            
+        default:
+            break;
+    }
+}
+
+#pragma mark -
+-(void)notifiedEnterOrderDetail:(NSNotification*)aNotify
+{
+    OrderV2* order = [aNotify object];
+    
+    OTSOrderMfVC* orderMfVC = [[[OTSOrderMfVC alloc] initWithNibName:@"OTSOrderMfVC" bundle:nil] autorelease];
+    orderMfVC.theOrder = order;
+    [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+    [self.view addSubview:orderMfVC.view];
+}
+
+#pragma mark - View lifecycle
+
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.needQuitWhenLogOut = YES;
+    
+    self.view.backgroundColor = [UIColor whiteColor];
+    self.view.frame = CGRectMake(0, 0, self.view.frame.size.width, self.view.frame.size.height);
+    [self assembleSubViews];
+    
+    self.servant = [[[OTSMfServant alloc] init] autorelease];
+    
+    [self requestAsync:[NSNumber numberWithInt:KOtsMfRequestOrderList]];
+    
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(notifiedEnterOrderDetail:) name:OTS_ENTER_ORDER_DETAIL object:nil];
+    
+    JSTrackingPrama* prama = [[JSTrackingPrama alloc]initWithJSType:EJStracking_MF extraPrama:nil];
+    [DoTracking doJsTrackingWithParma:prama];
+}
+
+
+- (void)viewDidUnload
+{
+    [super viewDidUnload];
+}
+
+
+-(void)dealloc
+{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [testNib release];
+    [servant release];
+    [tv release];
+    
+    [OTSMfImageCache cleanUp];
+    
+    [super dealloc];
+}
+
+#pragma mark - tv data source
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    DebugLog(@"the orderCount is:%d",[servant orderCount]);
+    if (servant.totalGroupOrderCount > 0) {
+        return [servant orderCount]+1;
+    }else {
+        return [servant orderCount];
+    }
+}
+
+-(NSString*)lastContentOfStatusPage:(Page*)aStatusPage
+{
+    if (aStatusPage && aStatusPage.objList && [aStatusPage.objList count] > 0)
+    {
+        OrderStatusTrackVO* statusTrack = [aStatusPage.objList objectAtIndex:[aStatusPage.objList count] - 1];
+        return statusTrack.oprContent;
+    }
+    
+    return nil;
+}
+
+- (NSMutableArray *)statusMessagesForOrder:(OrderV2 *)theOrder
+{
+    NSArray* statusList = [servant statusListForOrder:theOrder];
+    int statusCount = [statusList count];
+    NSMutableArray* statusMessages = [NSMutableArray array];
+    
+    for (int i = 0; i < statusCount; i++)
+    {
+        Page* theStatusPage = [statusList objectAtIndex:i];
+        NSString* lastStatus = [self lastContentOfStatusPage:theStatusPage];
+        if (lastStatus)
+        {
+            if (statusCount > 1)
+            {
+                lastStatus = [NSString stringWithFormat:@"包裹%@：%@", [OTSUtility chineseForDigit:i + 1], lastStatus];
+            }
+            
+            [statusMessages addObject:lastStatus];
+        }
+    }
+    
+    return statusMessages;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+
+    if (servant.totalGroupOrderCount > 0 && [indexPath row] == 0) {   // 有团购的情况，第一个Cell的初始化
+       
+        UITableViewCell * cell = [[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil] autorelease];
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        
+        UIView* bgView = [[UIView alloc] initWithFrame:CGRectMake(10, 15, 300, 50)]; //底层VIEW
+        [bgView setBackgroundColor:[UIColor whiteColor]];
+        bgView.layer.cornerRadius = 6;
+        bgView.layer.masksToBounds = YES;
+        bgView.layer.borderWidth = 1;
+        bgView.layer.borderColor = [UIColor lightGrayColor].CGColor;
+        
+        UILabel* label = [[UILabel alloc]initWithFrame:CGRectMake(10, 15, 200, 20)]; // 文字LABEL
+        label.text = @"1号商城订单物流查询";
+        label.font = [UIFont systemFontOfSize:16];
+        label.textAlignment = UITextAlignmentLeft;
+        [bgView addSubview:label];
+        [label release];
+        
+        UIImageView* imageView = [[UIImageView alloc] initWithFrame:CGRectMake(270, 17, 10, 15)]; // 箭头图像
+        [imageView setImage:[UIImage imageNamed:@"mf_title_arrow.png"]];
+        [bgView addSubview:imageView];
+        [imageView release];
+        
+        OTSBadgeView *badgeView=[[OTSCircleBadgeView alloc] initWithPosition:CGPointMake(230, 8) badgeNumber:servant.totalGroupOrderCount];                         // 显示数字的badgeView
+        [bgView addSubview:badgeView];
+        [badgeView release];
+        
+        UIButton* bgBtn = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, 300, 50)];       // 动作按钮，跳转至团购物流页面
+        [bgBtn setBackgroundColor:[UIColor clearColor]];
+        [bgBtn addTarget:self action:@selector(toGroupTrack) forControlEvents:UIControlEventTouchUpInside];
+        [bgView addSubview:bgBtn];
+        [bgBtn release];
+        
+        [cell addSubview:bgView];
+        [bgView release];
+        return cell;
+        
+    }else {                                                                         // 没有团购物流信息的情况
+        
+        static NSString* cellStr = @"mfCell";
+        UITableViewCell* cell = [tableView dequeueReusableCellWithIdentifier:cellStr]; 
+        
+        if (cell == nil)
+        {
+            cell = [[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellStr] autorelease];
+            [cell setBackgroundColor:[UIColor whiteColor]];
+            cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        }
+        
+        [[cell viewWithTag:OTS_MAGIC_TAG_NUMBER] removeFromSuperview];
+        
+        OrderV2* theOrder;
+        if (servant.totalGroupOrderCount > 0){
+            theOrder = [servant orderForIndex:[indexPath row]-1];
+        }else {
+            theOrder = [servant orderForIndex:[indexPath row]];
+        }
+        
+        //
+        OTSMfQueryItemView* itemView = [[[OTSMfQueryItemView alloc] initWithFrame:CGRectMake(10, 5, 300, 0) order:theOrder] autorelease];
+        
+        NSMutableArray *statusMessages = [self statusMessagesForOrder:theOrder];
+        itemView.statusMessages = statusMessages;
+        
+        itemView.tag = OTS_MAGIC_TAG_NUMBER;
+        [cell addSubview:itemView];
+        
+        //FooterView
+        //    [[cell viewWithTag:FOOTER_VIEW_TAG] removeFromSuperview];
+        //    if ([indexPath row] == [servant orderCount] - 1) 
+        //    {
+        //        [cell addSubview:loadingMoreLabel];
+        //    }
+        
+        return cell;
+    }
+}
+
+#pragma mark - tv delegate
+//- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section
+//{
+//    return 50;
+//}
+
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    if (!tv.isReloadingOK)
+    {
+        tv.originalContentHeight = [tv rectForSection:0].size.height;
+        [tv.pullToLoadView show:![servant reachTotalSize]];
+        tv.isReloadingOK = YES;
+    }
+}
+
+
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    int index = [indexPath row];
+    int height = 30 + [OTSProductThumbScrollView myHeight];
+    
+    if (servant.totalGroupOrderCount > 0 && [indexPath row] == 0) {
+        return height;
+    }else {
+        OrderV2* theOrder;
+        if (servant.totalGroupOrderCount > 0) {
+            theOrder = [servant orderForIndex:index-1];
+        }else{
+            theOrder = [servant orderForIndex:index];
+        }
+        if (theOrder)
+        {
+            NSArray* packageList = [servant statusListForOrder:theOrder];
+            if (packageList)
+            {
+                CGRect pkgRc = CGRectMake(0, 0, 300, 0);
+                
+                OTSMfStackLabel* label = [[[OTSMfStackLabel alloc] initWithFrame:pkgRc] autorelease];
+                label.statusMessages = [self statusMessagesForOrder:theOrder];
+                height += label.frame.size.height;
+            }
+            else
+            {
+                height += 60; 
+            }
+        }
+    }
+    
+    
+    return height + 20;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    DebugLog("@didSelectRowAtIndexPath");
+}
+
+
+- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView
+{
+    [tv.pullToLoadView show:![servant reachTotalSize]];
+}
+
+
+- (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView
+{
+    //NSLog(@"contentOffsetY:%f, scrollViewH:%f, contentSizeH:%f", scrollView.contentOffset.y, scrollView.frame.size.height, scrollView.contentSize.height);
+    
+    if (scrollView.contentOffset.y >= scrollView.contentSize.height - scrollView.frame.size.height) 
+    {
+        if (![servant reachTotalSize])
+        {
+            [self requestOrderListShowLoading:NO];
+        }
+        
+        [tv.pullToLoadView show:![servant reachTotalSize]];
+    }
+}
+
+
+@end

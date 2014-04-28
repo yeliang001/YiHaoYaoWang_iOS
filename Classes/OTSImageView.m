@@ -1,0 +1,145 @@
+//
+//  OTSImageView.m
+//  TheStoreApp
+//
+//  Created by yuan jun on 12-12-20.
+//
+//
+
+#import "OTSImageView.h"
+#import "GlobalValue.h"
+#import <CommonCrypto/CommonDigest.h>
+
+#define kSDImageViewActivityViewTag 100
+@implementation OTSImageView
+@synthesize imageUrl;
+@synthesize downBtn;
+-(void)dealloc{
+    [imageUrl release];
+     [super dealloc];
+}
+
+- (id)initWithFrame:(CGRect)frame
+{
+    self = [super initWithFrame:frame];
+    if (self) {
+        // Initialization code
+        self.userInteractionEnabled=YES;
+    }
+    return self;
+}
+-(void)loadImgUrl:(NSString*)imgUrlStr{
+    for (UIView* view in self.subviews) {
+        [view removeFromSuperview];
+    }
+    BOOL b= YES;//  [GlobalValue getGlobalValueInstance].shouldDownLoadIcon;
+    self.imageUrl=imgUrlStr;
+
+    if (b) {
+     //开关打开了
+        [self loadImg:nil];
+    }else{
+        self.image=[self placeHoldIcon];
+        if (self.imageUrl!=nil) {
+            
+            UIImage*img=[self queryImg];
+            if (img) {
+                self.image=img;
+            }else{
+                [self addDownBtn];
+            }
+        }
+    }
+}
+
+-(UIImage*)placeHoldIcon{
+    CGSize size=self.frame.size;
+    int w=(int)size.width;
+    int h=(int)size.height;
+    NSString*imgName=[NSString stringWithFormat:@"%dx%d-holder.png",2*w,2*h];
+    UIImage*image=[UIImage imageNamed:imgName];
+    if (image==nil) {
+        image=[UIImage imageNamed:@"200x200-holder.png"];
+    }
+    return image;
+}
+-(void)addDownBtn{
+   UIButton* Btn=[UIButton buttonWithType:UIButtonTypeCustom];
+    Btn.frame=self.bounds;
+    CGSize size=self.frame.size;
+    int w=(int)size.width;
+    int h=(int)size.height;
+    NSString*imgName=[NSString stringWithFormat:@"%dx%d-Btn.png",2*w,2*h];
+   UIImage *img= [UIImage imageNamed:imgName];
+    if (img==nil) {
+        img=[UIImage imageNamed:@"200x200-Btn.png"];
+    }
+    [Btn setImage:img forState:UIControlStateNormal];
+    [Btn addTarget:self action:@selector(loadImg:) forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:Btn];
+}
+
+-(UIImage*)queryImg{
+        const char *str = [[[NSURL URLWithString:imageUrl] absoluteString] UTF8String];
+        unsigned char r[CC_MD5_DIGEST_LENGTH];
+        CC_MD5(str, (CC_LONG)strlen(str), r);
+        NSString *filename = [NSString stringWithFormat:@"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+                              r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13], r[14], r[15]];
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
+    NSString* diskCachePath = [[paths objectAtIndex:0] stringByAppendingPathComponent:@"DataCache"] ;
+    NSString* filePath=[diskCachePath stringByAppendingPathComponent:filename];
+    NSData*data=[[[NSData alloc] initWithContentsOfFile:filePath] autorelease];
+    if (data!=nil) {
+        return [UIImage imageWithData:data];
+    }else{
+        return nil;
+    }
+}
+
+-(void)loadImg:(UIButton*)but{
+    SDWebDataManager *manager = [SDWebDataManager sharedManager];
+	if (but!=nil) {
+        [but removeFromSuperview];
+    }
+    // Remove in progress downloader from queue
+    [manager cancelForDelegate:self];
+    self.image = [self placeHoldIcon];
+    if (imageUrl) {
+        UIActivityIndicatorView *activityView = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
+            activityView.frame = CGRectMake((self.frame.size.width-25)/2,(self.frame.size.height-25)/2+self.frame.size.height/4, 25.0f, 25.0f);
+        //activityView.center=productTableView.center;
+        activityView.tag=kSDImageViewActivityViewTag;
+        [self  insertSubview:activityView atIndex:1];
+        //[self  bringSubviewToFront:activityView];
+        [activityView startAnimating];
+        [activityView release];
+        [manager downloadWithURL:[NSURL URLWithString:imageUrl] delegate:self refreshCache:NO];
+
+    }
+}
+
+
+- (void)cancelCurrentImageLoad
+{
+    [[SDWebDataManager sharedManager] cancelForDelegate:self];
+}
+
+#pragma mark -
+#pragma mark SDWebDataManagerDelegate
+
+- (void)webDataManager:(SDWebDataManager *)dataManager didFinishWithData:(NSData *)aData isCache:(BOOL)isCache
+{
+    UIView *activityView=[self viewWithTag:kSDImageViewActivityViewTag];
+    if (activityView) {
+        [activityView removeFromSuperview];
+    }
+	UIImage *img=[UIImage imageWithData:aData];
+    if (img) {
+        self.image=img;
+    }else{
+        self.image=[self placeHoldIcon];
+    }
+}
+
+
+@end

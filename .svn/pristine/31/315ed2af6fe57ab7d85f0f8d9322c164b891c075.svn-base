@@ -1,0 +1,52 @@
+how to use
+
+1.导入头文件
+#import "OTSOperationEngine.h"
+
+2.定义operation ID的KEY
+#define KEY_REQ_ID_ORDER_DETAIL     @"KEY_REQ_ID_ORDER_DETAIL"
+#define KEY_REQ_ID_BANK_LIST        @"KEY_REQ_ID_BANK_LIST"
+
+3.创建operation ID的数组
+@property(nonatomic, retain)    NSMutableDictionary     *requestIDs;
+@synthesize requestIDs = _requestIDs;
+
+_requestIDs = [[NSMutableDictionary alloc] initWithCapacity:2];
+OTS_SAFE_RELEASE(_requestIDs);
+
+根据key找到operation id
+-(int)idForKey:(NSString*)aIdKey
+{
+    id value = [_requestIDs objectForKey:aIdKey];
+    return [value intValue];
+}
+
+4.注册通知
+ [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(handleOperationFinished:)
+                                                     name:OTS_NOTIFY_OPERATION_FINISHED
+                                                   object:nil];
+
+通知处理
+-(void)handleOperationFinished:(NSNotification*)aNotification
+{
+    OTSInvocationOperation* operation = aNotification.object;
+    if (operation.caller == self)
+    {
+        if (operation.operationID == [self idForKey:KEY_REQ_ID_ORDER_DETAIL])
+        {
+            [self retrieveOrderDetailOK];
+        }
+        else if (operation.operationID == [self idForKey:KEY_REQ_ID_BANK_LIST])
+        {
+            [self retrieveBankListOK];
+        }
+    }
+}
+
+5. 发起operation并保存id
+int requestID = [[OTSOperationEngine sharedInstance] doOperationForSelector:@selector(retrieveOrderDetail) target:self object:nil caller:self];
+        [_requestIDs setObject:[NSNumber numberWithInt:requestID] forKey:KEY_REQ_ID_ORDER_DETAIL];
+        
+        requestID = [[OTSOperationEngine sharedInstance] doOperationForSelector:@selector(retrieveBankList) target:self object:nil caller:self];
+        [_requestIDs setObject:[NSNumber numberWithInt:requestID] forKey:KEY_REQ_ID_BANK_LIST];

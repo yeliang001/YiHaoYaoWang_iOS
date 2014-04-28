@@ -1,0 +1,16 @@
+//
+//  YWSearchService.h
+//  TheStoreApp
+//
+//  Created by LinPan on 13-8-5.
+//
+//
+
+#import "BaseService.h"
+
+@class SearchResultInfo;
+@interface YWSearchService : BaseService
+
+- (SearchResultInfo *)getSearchProductListWithParam:(NSDictionary *)paramDic;
+- (NSMutableArray *)getSearchKeyword:(NSDictionary *)paramDic;
+@end

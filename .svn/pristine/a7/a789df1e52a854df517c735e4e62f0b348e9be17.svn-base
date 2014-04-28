@@ -1,0 +1,16 @@
+//
+//  Activity.h
+//  TheStoreApp
+//
+//  Created by yangxd on 11-9-22.
+//  Copyright 2011 __MyCompanyName__. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+
+@interface Activity : UIView {
+
+}
+
+@end

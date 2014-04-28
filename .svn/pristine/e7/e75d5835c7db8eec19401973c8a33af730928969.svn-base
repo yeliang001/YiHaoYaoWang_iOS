@@ -1,0 +1,33 @@
+//
+//  YWUserLoginHelper.h
+//  TheStoreApp
+//
+//  Created by LinPan on 13-8-15.
+//
+//
+
+#import <Foundation/Foundation.h>
+@class LoginResultInfo;
+
+typedef enum
+{
+    kYWLoginNone = 0
+    , kYWLoginStore         // 1号药店登录
+    , kYWLoginUnion         // 联合登录
+}YWLoginType;
+
+
+@interface YWUserLoginHelper : NSObject
+@property (retain, nonatomic) LoginResultInfo *loginResult;
+
++ (YWUserLoginHelper *)sharedInstance;
+- (BOOL)isLoginSuccess;
+- (BOOL)isNilResult;
+- (BOOL)isResultHasError;
+
+
+
+- (BOOL)loginWithType:(YWLoginType)aLoginType param:(NSDictionary *)aParam;
+
+
+@end

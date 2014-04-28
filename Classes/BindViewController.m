@@ -1,0 +1,509 @@
+//
+//  CellPhoneBindViewController.m
+//  TheStoreApp
+//
+//  Created by towne on 12-10-31.
+//
+//
+
+#import "BindViewController.h"
+#import "TheStoreAppAppDelegate.h"
+
+#define SVHIGHT  44
+#define BIND_PLACEHOLDER      @"绑定用手机号码"
+#define BIND_PHONE_EMPTY      @" 绑定的号码不能为空，请输入"
+#define BIND_PHONE_CHECK11    @" 请输入11位手机号,您输入了%d位"
+#define BIND_PHONE_CHECKINUSE @" 该手机已经绑定其他帐户，请重新输入"
+#define BIND_CODE_DEFAULT     @"请输入验证码"
+#define BIND_CODE_LENGTH  6
+#define BIND_CODE_ERROR       @" 请输入%d位验证码，您输入了%d位"
+#define BIND_CODE_EMPTY       @" 验证码不能为空，请输入"
+#define BIND_CODE_CHECK       @" 验证码不正确，请重新输入"
+#define BIND_RFBTN_TEXT       @"重新获取验证码"
+#define BIND_RFBTN1_TEXT      @"重新获取验证码(%ds)"
+#define OFFSETMAX      15.0
+
+@interface BindViewController ()
+
+@end
+
+@implementation BindViewController
+@synthesize isBindMobile;
+@synthesize bindMobileNum=_bindMobileNum;
+
+- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
+{
+    self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
+    if (self) {
+        // Custom initialization
+    }
+    return self;
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    // Do any additional setup after loading the view from its nib.
+    [self.view setBackgroundColor:[UIColor colorWithRed:240.0/255.0 green:240.0/255.0 blue:240.0/255.0 alpha:1.0]];
+    DebugLog(@"dd>>%d",isBindMobile);
+    [self initialize];
+    [self.view addSubview:_phoneBindingView];
+    [_needBindingPhoneNUM setDelegate:self];
+//    [_phoneBindingGetVerifyBTN setEnabled:NO];
+    
+//    if (self.isFullScreen)
+//    {
+//        [self strechViewToBottom:_phoneBindingView];
+//    }
+    
+    // iphone5适配 - dym
+    CGRect rc = _phoneBindingView.frame;
+    rc.size.height = self.view.frame.size.height;
+    _phoneBindingView.frame = rc;
+    _phoneBindingverifyView.frame = rc;
+    
+    rc = _phoneBindAlreadyView.frame;
+    rc.size.height = self.view.frame.size.height -  OTS_IPHONE_NAVI_BAR_HEIGHT;
+    _phoneBindAlreadyView.frame = rc;
+    _phoneBingdingScrollView.frame = rc;
+    _phoneBindingVerifyScrollView.frame = rc;
+    
+}
+
+-(void)initialize
+{
+    NSString * BindMobile;
+    NSNumberFormatter* numberFormatter = [[NSNumberFormatter alloc] init];
+    BindMobile = [numberFormatter stringFromNumber:_bindMobileNum];
+    [numberFormatter release];
+    
+    //手机绑定 判定
+    if (isBindMobile) {
+        [_phoneBindingNUM setText:BindMobile];
+        [_phoneBingdingScrollView setHidden:YES];
+        [_phoneBindAlreadyView setHidden:NO];
+    }
+    else
+    {
+        [_phoneBindAlreadyView setHidden:YES];
+        [_phoneBingdingScrollView setHidden:NO];
+    }
+    [_phoneBingdingScrollView setAlwaysBounceVertical:YES];
+    [_phoneBindingVerifyScrollView setAlwaysBounceVertical:YES];
+    [_phoneBingdingScrollView setDelegate:self];
+    [_needBindingPhoneNUM setDelegate:self];
+    
+    //绑定验证
+    [_phoneBindingVerifyScrollView setAlwaysBounceVertical:YES];
+    [_phoneBindingVerifyScrollView setDelegate:self];
+    [_phoneBindingVerifyCodeRefetchBTN setTitle:BIND_RFBTN_TEXT forState:UIControlStateNormal];
+}
+
+- (void)didReceiveMemoryWarning
+{
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+#pragma mark 联系客服
+-(IBAction)haodianCustomerServiceClick:(id)sender
+{
+    UIActionSheet *actionSheet=[[OTSActionSheet alloc] initWithTitle:@"客服工作时间 : 每日 9:00-21:00" delegate:self cancelButtonTitle:@"取消" destructiveButtonTitle:nil otherButtonTitles:@"400-007-0958", nil];
+    [actionSheet showInView:[UIApplication sharedApplication].keyWindow];
+    [actionSheet release];
+}
+
+//返回
+-(IBAction)returnBtnClicked:(id)sender
+{
+    [self.view.superview.layer addAnimation:[OTSNaviAnimation animationPushFromLeft] forKey:@"Reveal"];
+    [self removeSelf];
+    [SharedDelegate.tabBarController removeViewControllerWithAnimation:[OTSNaviAnimation animationPushFromLeft]];
+}
+
+-(BOOL)validatePhoneNumField
+{
+    BOOL passed = NO;
+    
+    if (_needBindingPhoneNUM.text == nil || [_needBindingPhoneNUM.text length] <= 0)
+    {
+        _phoneBindingWarningLB.text = BIND_PHONE_EMPTY;
+        _offset = OFFSETMAX;
+    }
+    else if ([_needBindingPhoneNUM.text length] != 11)
+    {
+        _phoneBindingWarningLB.text = [NSString stringWithFormat:BIND_PHONE_CHECK11, [_needBindingPhoneNUM.text length]];
+        _offset = OFFSETMAX;
+    }
+    else
+    {
+        _phoneBindingWarningLB.text = @"";
+        passed = YES;
+    }
+    
+    _phoneBindingWarningLB.hidden = passed;
+    _phoneBindingWarningMask.hidden = passed;
+    
+    if (!_rever && !passed) {
+        _phoneBindingGetVerifyBTN.layer.position =
+        CGPointMake(_phoneBindingGetVerifyBTN.frame.origin.x+_phoneBindingGetVerifyBTN.frame.size.width/2,
+                    _phoneBindingGetVerifyBTN.frame.origin.y+_phoneBindingGetVerifyBTN.frame.size.height/2+_offset);
+        _rever = YES;
+    }
+    return passed;
+}
+
+-(BOOL)validateCodeField
+{
+    BOOL passed = NO;
+    
+    if (_phoneBindingVerifyCode.text == nil || [_phoneBindingVerifyCode.text length] <= 0 || [_phoneBindingVerifyCode.text isEqualToString:@"请输入验证码"])
+    {
+        _phoneBindingVerifyWarningLB.text = BIND_CODE_EMPTY;
+    }
+    else if ([_phoneBindingVerifyCode.text length] != BIND_CODE_LENGTH)
+    {
+        _phoneBindingVerifyWarningLB.text = [NSString stringWithFormat:BIND_CODE_ERROR
+                                             , BIND_CODE_LENGTH
+                                             , [_phoneBindingVerifyCode.text length]];
+    }
+    else
+    {
+        _phoneBindingVerifyWarningLB.text = @"";
+        passed = YES;
+    }
+    
+    _phoneBindingVerifyWarningLB.hidden = passed;
+    _phoneBindingVerifyWarningMask.hidden = passed;
+    
+    return passed;
+}
+
+- (BOOL)revertPhoneBindingGetVerifyPosition{
+    if (_rever) {
+        _phoneBindingGetVerifyBTN.layer.position = CGPointMake(_phoneBindingGetVerifyBTN.frame.origin.x+_phoneBindingGetVerifyBTN.frame.size.width/2, _phoneBindingGetVerifyBTN.frame.origin.y+_phoneBindingGetVerifyBTN.frame.size.height/2-_offset);
+        [_phoneBindingWarningLB setHidden:YES];
+        [_phoneBindingWarningMask setHidden:YES];
+        _rever = NO;
+    }
+    return _rever;
+}
+
+-(void)revertSomeElse
+{
+    [_phoneBindingVerifyWarningLB setHidden:YES];
+    [_phoneBindingVerifyWarningMask setHidden:YES];
+}
+
+-(void)fireTheTimer
+{
+    _expireSeconds = 60;
+    if (_timer) {
+        _timer = nil;
+        _currentSeconds = 0;
+    }
+    _timer = [NSTimer scheduledTimerWithTimeInterval:1
+                                              target:self
+                                            selector:@selector(timerFireMethod:)
+                                            userInfo:nil
+                                             repeats:YES];
+}
+#pragma mark 手机绑定－获取验证码
+-(IBAction)phonebindVerifyClick:(id)sender
+{
+    NSString *phoneNumberText = [_needBindingPhoneNUM text];
+    long long value = [phoneNumberText longLongValue];
+    NSNumber *phonenumber = [NSNumber numberWithLongLong:value];
+    
+    BOOL phoneNumberOK = [self validatePhoneNumField];
+    if (phoneNumberOK) {
+        [_needBindingPhoneNUM resignFirstResponder];
+        [self showLoading];
+        __block SendBindValidateCodeResult  *__sbvcResult = nil;
+        [self performInThreadBlock:^(){
+            //验证手机号
+            __sbvcResult  = [[[OTSServiceHelper sharedInstance] sendValidateCodeForBindMobile:[GlobalValue getGlobalValueInstance].token phone:phonenumber] retain];
+            
+        } completionInMainBlock:^(){
+            //刷新ui
+            [_phoneBindingVerifyPhoneNUM setText:phoneNumberText];
+            [self hideLoading];
+            
+            if ([[__sbvcResult resultCode] isEqualToNumber:[NSNumber numberWithInt:1]]) {
+                [self fireTheTimer];
+                [self toVarificationView];
+            }
+            else if(__sbvcResult == nil || [__sbvcResult isKindOfClass:[NSNull class]])
+            {
+                [self showInfo:@"网络异常，请检查网络配置..."];
+            }
+            else
+            {
+                [self showInfo:__sbvcResult.errorInfo];
+            }
+            OTS_SAFE_RELEASE(__sbvcResult);
+        }];
+
+    }
+}
+
+#pragma mark 手机绑定－提交验证码
+-(IBAction)verificationSubmit:(id)sender
+{
+    NSString *codeNumber = [_phoneBindingVerifyCode text];
+    
+    NSString *phoneNumberText = [_needBindingPhoneNUM text];
+    long long value = [phoneNumberText longLongValue];
+    NSNumber *phonenumber = [NSNumber numberWithLongLong:value];
+    
+    BOOL codeNumberOK = [self validateCodeField];
+    if (codeNumberOK) {
+        [_phoneBindingVerifyCode resignFirstResponder];
+        [self showLoading];
+        __block BindMobileResult *__bmResult = nil;
+        [self performInThreadBlock:^(){
+            //验证手机号
+            __bmResult = [[[OTSServiceHelper sharedInstance] bindMobileValidate:[GlobalValue getGlobalValueInstance].token phone:phonenumber validateCode:codeNumber] retain];
+        } completionInMainBlock:^(){
+            //刷新ui
+            [self hideLoading];
+            if ([[__bmResult resultCode] isEqualToNumber:[NSNumber numberWithInt:1]]) {
+                //需要刷新我的1号药店
+                [[NSNotificationCenter defaultCenter] postNotificationName:@"MyStoreChanged" object:self];
+                // refresh my store VC
+    
+                BindViewController *phonebindVC=[[[BindViewController alloc]initWithNibName:@"BindViewController" bundle:nil] autorelease];
+                [phonebindVC setIsBindMobile:YES];
+                [phonebindVC setBindMobileNum:phonenumber];
+                phonebindVC.isFullScreen = YES;
+                [((MyStoreViewController*)[SharedDelegate.tabBarController.viewControllers objectAtIndex:3]) updateMyStore];
+                [SharedDelegate.tabBarController addViewController:phonebindVC withAnimation:[OTSNaviAnimation animationPushFromRight]];
+            }
+            else if(__bmResult == nil || [__bmResult isKindOfClass:[NSNull class]])
+            {
+                [self showInfo:@"网络异常，请检查网络配置..."];
+            }
+            else
+            {
+                [self showInfo:__bmResult.errorInfo];
+            }
+            OTS_SAFE_RELEASE(__bmResult);
+        }];
+    }
+}
+
+#pragma mark 手机绑定－重新获取验证码
+-(IBAction)verificationReFetch:(id)sender
+{
+    [_phoneBindingVerifyCode resignFirstResponder];
+ 
+    NSString *phoneNumberText = [_needBindingPhoneNUM text];
+    long long value = [phoneNumberText longLongValue];
+    NSNumber *phonenumber = [NSNumber numberWithLongLong:value];
+    __block SendBindValidateCodeResult  *__sbvcResult = nil;
+    [self showLoading];
+    [self performInThreadBlock:^(){
+        //验证手机号
+        __sbvcResult  = [[[OTSServiceHelper sharedInstance] sendValidateCodeForBindMobile:[GlobalValue getGlobalValueInstance].token phone:phonenumber] retain];
+    } completionInMainBlock:^(){
+        //刷新ui
+        [self hideLoading];
+        if(__sbvcResult == nil || [__sbvcResult isKindOfClass:[NSNull class]])
+        {
+            [self showInfo:@"网络异常，请检查网络配置..."];
+        }
+        else if (![[__sbvcResult resultCode] isEqualToNumber:[NSNumber numberWithInt:1]]) {
+            [self showInfo:[__sbvcResult errorInfo]];
+        }
+        else {
+            [self fireTheTimer];
+        }
+        OTS_SAFE_RELEASE(__sbvcResult);
+    }];
+}
+
+- (void)timerFireMethod:(NSTimer*)theTimer
+{
+    _currentSeconds++;
+    if (_currentSeconds >= _expireSeconds)
+    {
+        [_phoneBindingVerifyCodeRefetchBTN setTitle:BIND_RFBTN_TEXT forState:UIControlStateNormal];
+        [_phoneBindingVerifyCodeRefetchBTN setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+        _phoneBindingVerifyCodeRefetchBTN.enabled = YES;
+        
+        [theTimer invalidate];
+        theTimer = nil;
+        _currentSeconds = 0;
+    }
+    else
+    {
+        _phoneBindingVerifyCodeRefetchBTN.enabled = NO;
+        [_phoneBindingVerifyCodeRefetchBTN setTitleColor:[UIColor grayColor] forState:UIControlStateNormal];
+        [_phoneBindingVerifyCodeRefetchBTN setTitle:[NSString stringWithFormat:BIND_RFBTN1_TEXT, _expireSeconds - _currentSeconds] forState:UIControlStateNormal];
+    }
+}
+
+-(void)toVarificationView
+{
+	CATransition *animation=[CATransition animation];
+	animation.duration=0.3f;
+	animation.timingFunction=UIViewAnimationCurveEaseInOut;
+	[animation setType:kCATransitionPush];
+	[animation setSubtype: kCATransitionFromRight];
+	[self.view.layer addAnimation:animation forKey:@"Reveal"];
+	[self.view addSubview:_phoneBindingverifyView];
+}
+
+-(IBAction)returninVerification{
+	CATransition *animation=[CATransition animation];
+	animation.duration=0.3f;
+	animation.timingFunction=UIViewAnimationCurveEaseInOut;
+	[animation setType:kCATransitionReveal];
+	[animation setSubtype: kCATransitionFromLeft];
+	[self.view.layer addAnimation:animation forKey:@"Reveal"];
+	[_phoneBindingverifyView removeFromSuperview];
+}
+
+#pragma mark actionsheet相关
+-(void)actionSheet:(UIActionSheet *)actionSheet didDismissWithButtonIndex:(NSInteger)buttonIndex {
+    switch (buttonIndex) {
+        case 0: {
+            UIDeviceHardware *hardware=[[UIDeviceHardware alloc] init];
+            //判断设备是否iphone
+            /* if (!([[hardware platformString] isEqualToString:@"iPhone 1G"] ||
+             [[hardware platformString] isEqualToString:@"iPhone 3G"] ||
+             [[hardware platformString] isEqualToString:@"iPhone 3GS"] ||
+             [[hardware platformString] isEqualToString:@"iPhone 4"] ||
+             [[hardware platformString] isEqualToString:@"Verizon iPhone 4"])) */
+            NSRange range = [[hardware platformString] rangeOfString:@"iPhone"];
+            if (range.length <= 0) {
+                [[GlobalValue getGlobalValueInstance] setHaveAlertViewInShow:YES];
+                [AlertView showAlertView:nil alertMsg:@"您的设备不支持此项功能,感谢您对1号药店的支持!" buttonTitles:nil alertTag:ALERTVIEW_TAG_COMMON];
+            } else {
+                [[UIApplication sharedApplication] openURL:[NSURL URLWithString:@"tel://4000070958"]];
+            }
+            [hardware release];
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+#pragma mark scrollviewDelegate
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView{
+    [_needBindingPhoneNUM resignFirstResponder];
+    [_phoneBindingVerifyCode resignFirstResponder];
+    [self revertPhoneBindingGetVerifyPosition];
+    [self revertSomeElse];
+}
+
+- (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView{
+}
+
+
+#pragma mark textfielddelegete
+- (void)textFieldDidBeginEditing:(UITextField *)textField
+{
+    if (textField == _needBindingPhoneNUM)
+    {
+        _needBindingPhoneNUM.text = @"";
+        _phoneBindingWarningLB.hidden = YES;
+        _phoneBindingWarningMask.hidden = YES;
+        [self revertPhoneBindingGetVerifyPosition];
+    }
+    
+}
+
+- (BOOL)textFieldShouldBeginEditing:(UITextField *)textField
+{
+	[UIView setAnimationsEnabled:NO];
+    
+	return YES;
+}
+
+- (BOOL)textFieldShouldEndEditing:(UITextField *)textField{
+    
+    return YES;
+}
+//各页面点击键盘 return 键后的操作
+-(BOOL)textFieldShouldReturn:(UITextField *)textField
+{
+    if (textField == _needBindingPhoneNUM) {
+        [self validatePhoneNumField];
+        _phoneBindingWarningLB.hidden = [_needBindingPhoneNUM.text length] > 0 ;
+        _phoneBindingWarningMask.hidden = [_needBindingPhoneNUM.text length] > 0;
+    }
+    
+	[UIView setAnimationsEnabled:NO];
+    
+	return YES;
+}
+
+- (BOOL)textField:(UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string
+{
+    NSInteger changedLength = [string length];
+    
+    if (textField == _needBindingPhoneNUM && [_needBindingPhoneNUM.text length] >= 11 && changedLength)
+    {
+        return NO;
+    }
+    if ([_needBindingPhoneNUM.text length] == 10) {
+        [_phoneBindingGetVerifyBTN setEnabled:YES];
+    }
+    else {
+        [_phoneBindingGetVerifyBTN setEnabled:NO];
+    }
+    return YES;
+}
+
+- (BOOL)textFieldShouldClear:(UITextField *)textField{
+    [_phoneBindingGetVerifyBTN setEnabled:NO];
+    return YES;
+}
+
+
+-(void)showInfo:(NSString *)info
+{
+    UIAlertView *alerView=[[UIAlertView  alloc] initWithTitle:nil message:info delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
+    [alerView show];
+    [alerView release];
+}
+
+#pragma mark -
+-(void)releaseMyResoures
+{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    
+    OTS_SAFE_RELEASE(_phoneBindingView);
+    OTS_SAFE_RELEASE(_phoneBindingVerifyCode);
+    OTS_SAFE_RELEASE(_phoneBindAlreadyView);
+    OTS_SAFE_RELEASE(_1haodianCustomerServiceBTN);
+    OTS_SAFE_RELEASE(_phoneBindingNUM);
+    OTS_SAFE_RELEASE(_phoneBingdingScrollView);
+    OTS_SAFE_RELEASE(_needBindingPhoneNUM);
+    OTS_SAFE_RELEASE(_phoneBindingWarningLB);
+    OTS_SAFE_RELEASE(_phoneBindingWarningMask);
+    OTS_SAFE_RELEASE(_phoneBindingGetVerifyBTN);
+    OTS_SAFE_RELEASE(_phoneBindingVerifyScrollView);
+    OTS_SAFE_RELEASE(_phoneBindingVerifyWarningLB);
+    OTS_SAFE_RELEASE(_phoneBindingVerifyWarningMask);
+    OTS_SAFE_RELEASE(_phoneBindingVerifyPhoneNUM);
+    OTS_SAFE_RELEASE(_phoneBindingVerifyCode);
+    OTS_SAFE_RELEASE(_phoneBindingVerifyCodeSubmitBTN);
+    OTS_SAFE_RELEASE(_phoneBindingVerifyCodeRefetchBTN);
+    OTS_SAFE_RELEASE(_bindMobileNum);
+}
+
+- (void)viewDidUnload
+{
+    [super viewDidUnload];
+    [self releaseMyResoures];
+}
+
+-(void)dealloc
+{
+    [self releaseMyResoures];
+    [super dealloc];
+}
+@end

@@ -1,0 +1,83 @@
+//
+//  CategoryProductsViewController.h
+//  TheStoreApp
+//
+//  Created by jun yuan on 12-9-19.
+//  Copyright (c) 2012年 __MyCompanyName__. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+#import "OTSBaseViewController.h"
+#import "Filter.h"
+#import "SearchResultVO.h"
+#import "BackToTopView.h"
+#import "NSObject+OTS.h"
+#import "CartAnimation.h"
+@class CategoryInfo;
+
+@interface CategoryProductsViewController : OTSBaseViewController<UITableViewDelegate,UITableViewDataSource,CartAnimationDelegate>{
+    NSString* titleText;
+    NSString* titleLableText;  //标题
+    UITableView* productsTable;//商品列表
+    NSString * cateId;
+    NSNumber *promotionId;     //促销活动id
+    NSNumber *canJoin;             //是否满足条件
+    NSNumber *isJoinCash;       //是否已经参加
+    
+	NSNumber * buyQuantity;							// 购买商品数量
+
+    UITableView* selectionTable;//排序和分类选择 共用table
+    
+    int selectionType;
+    UIImageView*nullImg;//空态
+    UIView* selectionBG;
+    UIButton* selectionBTN;
+    NSInteger sortType;//排序的类型
+    int m_CurrentPageIndex;//当前页
+    int m_ProductTotalCount;
+    int m_DoTrackingFlag;
+    BOOL isLoadingMore;
+    //筛选器
+    NSNumber *m_BrandId;
+    NSString* m_Attributes;
+    NSString* m_PriceRange;
+    NSString* m_PromotionType;//优惠类型
+    NSString* m_BusinessType;//商家类型
+    BOOL m_IsOriginal;
+    BOOL isCashPromotionList;//状态，当前是否是满减列表
+    BOOL isLastLevel;//表示从第三级分类进入的
+    BOOL isFailSatisfyFullDiscount;//表示不满足满减的情况(从购物车过来)
+    SearchResultVO *m_SearchResultVO;
+    SearchResultVO *m_OriginalSearchResultVO;
+    NSMutableDictionary *m_FilterDictionary;
+    UIButton* m_FilterBtn;
+    UIButton* cateBtn;
+    UIButton* sortBtn;
+    UIImageView*sortArrow;
+    UIImageView*cateArrow;
+    NSMutableArray* categoryTypeArray,/*传入的分类种类数据*/ *sortArray;//排序的种类数据
+    
+    BackToTopView *m_backToTop;						// 返回顶部
+    UIImageView* promoteBar;   // 满减的推广条
+    UILabel* needpayLabel;
+    SearchParameterVO * sParam;
+}
+@property(nonatomic,assign)BOOL isLastLevel;
+@property(nonatomic,assign)BOOL isFailSatisfyFullDiscount;
+@property(nonatomic,assign)BOOL isCashPromotionList;
+@property(nonatomic,retain)NSString* titleText;
+@property(nonatomic,retain)NSString* titleLableText;
+@property(nonatomic,retain)NSMutableArray* categoryTypeArray;
+@property(nonatomic,retain)NSString *cateId;
+@property(nonatomic,retain)NSNumber *promotionId;
+@property(nonatomic,retain)NSNumber *canJoin;//是否满足条件
+@property(nonatomic,retain)NSNumber *isJoinCash;       //是否已经参加
+
+@property(retain,nonatomic)CategoryInfo *currentCategory; //当前的分类
+@property(assign,nonatomic)BOOL bSelectAllCategory;//是否选择了全部分类
+
+- (void)initTop;
+- (void)inittable;
+- (void)sendRequset;
+-(void)dismissSelection;
+@end

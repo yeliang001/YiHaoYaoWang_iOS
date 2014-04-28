@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+	<string>酒</string>
+	<string>饮料</string>
+	<string>食品</string>
+	<string>玩具</string>
+	<string>日用品</string>
+	<string>装修材料</string>
+	<string>化妆品</string>
+	<string>图书</string>
+	<string>办公用品</string>
+	<string>音像制品</string>
+	<string>学生用品</string>
+	<string>家具用品</string>
+	<string>饰品</string>
+	<string>服装</string>
+	<string>箱包</string>
+	<string>家电</string>
+	<string>劳防用品</string>
+</array>
+</plist>

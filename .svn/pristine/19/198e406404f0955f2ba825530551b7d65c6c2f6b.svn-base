@@ -1,0 +1,838 @@
+//
+//  PromotionViewController.m
+//  TheStoreApp
+//
+//  Created by yuan jun on 12-10-26.
+//
+//
+
+#import "PromotionViewController.h"
+#import "PromotionCell.h"
+#import "MobilePromotionVO.h"
+#import "ProductVO.h"
+#import "CartService.h"
+#import "GlobalValue.h"
+#import "AlertView.h"
+#import "OTSLoadingView.h"
+#import "OTSUtility.h"
+#import "ProductService.h"
+#import "CartCache.h"
+#import "TheStoreAppAppDelegate.h"
+@interface PromotionViewController ()
+@end
+
+@implementation PromotionViewController
+@synthesize giftArray,selectedGiftArray;
+@synthesize isCutoffShow,hasPassedData,redemptionArray,selRedemptArray,cartProductArray;
+-(void)dealloc{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [selRedemptArray release];
+    [currentRedemptionArray release];
+    [redemptionArray release];
+    [currentSelectdGiftArray release];
+    [selectedGiftArray release];
+    [giftArray release];
+    [super dealloc];
+}
+
+- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
+{
+    self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
+    if (self) {
+        // Custom initialization
+        giftArray=[[NSMutableArray alloc] init];
+        redemptionArray=[[NSMutableArray alloc] init];
+    }
+    return self;
+}
+#pragma mark init views
+- (void)initTopView{
+    UIImageView* nav=[[UIImageView alloc] initWithImage:[UIImage imageNamed:@"title_bg.png"]];
+    nav.frame=CGRectMake(0, 0, 320, 44);
+    nav.userInteractionEnabled=YES;
+    [self.view addSubview:nav];
+    [nav release];
+    
+    UIButton*back=[UIButton buttonWithType:UIButtonTypeCustom];
+    back.frame=CGRectMake(0, 0, 61, 44);
+    [back setBackgroundImage:[UIImage imageNamed:@"title_left_btn.png"] forState:UIControlStateNormal];
+    [back setBackgroundImage:[UIImage imageNamed:@"title_left_btn_sel.png"] forState:UIControlStateHighlighted];
+    [back addTarget:self action:@selector(naviBack) forControlEvents:UIControlEventTouchUpInside];
+    [nav addSubview:back];
+    
+    UILabel* titLab=[[UILabel alloc] initWithFrame:CGRectMake(60, 2, 200, 40)];
+    titLab.text=@"领取赠品/低价换购";
+    titLab.textAlignment=UITextAlignmentCenter;
+    titLab.textColor=[UIColor whiteColor];
+    titLab.font=[UIFont boldSystemFontOfSize:20];
+    titLab.shadowColor=[UIColor darkGrayColor];
+    titLab.backgroundColor=[UIColor clearColor];
+    [nav addSubview:titLab];
+    [titLab release];
+    segmentView=[[UIView alloc] initWithFrame:CGRectMake(0, 44, self.view.frame.size.width, 37)];
+    [self.view addSubview:segmentView];
+    [segmentView release];
+    
+    giftBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    [giftBtn setTitle:@"领取赠品" forState:UIControlStateNormal];
+    [giftBtn setBackgroundImage:[UIImage imageNamed:@"cutoff_cateBG.png"] forState:UIControlStateNormal];
+    [giftBtn setBackgroundImage:[UIImage imageNamed:@"cutoff_cateBG_s.png"] forState:UIControlStateSelected];
+    
+    [giftBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateSelected];
+    [giftBtn setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+    giftBtn.frame=CGRectMake(0, 0, 160, 37);
+    [giftBtn addTarget:self action:@selector(showGift) forControlEvents:UIControlEventTouchUpInside];
+    [segmentView addSubview:giftBtn];
+    
+    cutoffBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    [cutoffBtn setTitle:@"低价换购" forState:UIControlStateNormal];
+    [cutoffBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateSelected];
+    [cutoffBtn setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+    [cutoffBtn setBackgroundImage:[UIImage imageNamed:@"cutoff_cateBG.png"] forState:UIControlStateNormal];
+    [cutoffBtn setBackgroundImage:[UIImage imageNamed:@"cutoff_cateBG_s.png"] forState:UIControlStateSelected];
+    [cutoffBtn addTarget:self action:@selector(showCutoff) forControlEvents:UIControlEventTouchUpInside];
+    cutoffBtn.frame=CGRectMake(160, 0, 160, 37);
+    [segmentView addSubview:cutoffBtn];
+
+}
+-(void)refreshTableStatus{
+    if ([CartCache sharedCartCache].giftArCache.count==0||[CartCache sharedCartCache].redemptionArCache.count==0) {
+        segmentView.hidden=YES;
+    }
+    if ([CartCache sharedCartCache].giftArCache.count==0&&[CartCache sharedCartCache].redemptionArCache.count!=0){
+        giftTable.hidden=YES;
+        cutoffTable.hidden=NO;
+        cutoffTable.frame=CGRectMake(0, 44, self.view.frame.size.width, self.view.frame.size.height-44);
+    }else if ([CartCache sharedCartCache].giftArCache.count!=0&&[CartCache sharedCartCache].redemptionArCache.count==0){
+        giftTable.hidden=NO;
+        cutoffTable.hidden=YES;
+        giftTable.frame=CGRectMake(0, 44, self.view.frame.size.width, self.view.frame.size.height-44);
+    }
+}
+-(void)initTables{
+
+    giftTable=[[UITableView alloc] initWithFrame:CGRectMake(0, 44+37, self.view.frame.size.width, self.view.frame.size.height-44-37) style:UITableViewStylePlain];
+    giftTable.delegate=self;
+    giftTable.dataSource=self;
+    [self.view addSubview:giftTable];
+    giftTable.hidden=YES;
+    [giftTable release];
+    
+    cutoffTable=[[UITableView alloc] initWithFrame:CGRectMake(0, 44+37, self.view.frame.size.width, self.view.frame.size.height-44-37) style:UITableViewStylePlain];
+    cutoffTable.delegate=self;
+    cutoffTable.dataSource=self;
+    cutoffTable.hidden=YES;
+    [self.view addSubview:cutoffTable];
+    [cutoffTable release];
+    if (isCutoffShow) {
+        [self showCutoff];
+    }else{
+        [self showGift];
+    }
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    [self.view setBackgroundColor:[UIColor colorWithRed:240.0/255.0 green:240.0/255.0 blue:240.0/255.0 alpha:1.0]];
+    if (iPhone5) {
+        self.view.frame=CGRectMake(0, 20, 320, 548);
+    }else{
+        self.view.frame=CGRectMake(0, 20, 320, 460);
+    }
+
+//    self.view.frame=CGRectMake(0, 0, 320, 480);
+    if (currentSelectdGiftArray==nil) {
+        currentSelectdGiftArray=[[NSMutableArray alloc] init];
+    }
+    if (currentRedemptionArray==nil) {
+        currentRedemptionArray=[[NSMutableArray alloc] init];
+    }
+    [currentRedemptionArray addObjectsFromArray:selRedemptArray];
+    [currentSelectdGiftArray addObjectsFromArray:selectedGiftArray];
+    [self initTopView];
+    [self initTables];
+//    if (hasPassedData) {
+//        [self refreshTableStatus];
+//    }else{
+        [self.loadingView showInView:self.view];
+//    }
+    if ( SharedDelegate.needCachedPromotion) {
+        [[CartCache sharedCartCache].giftArCache removeAllObjects];
+        [[CartCache sharedCartCache].redemptionArCache removeAllObjects];
+        [self otsDetatchMemorySafeNewThreadSelector:@selector(requestALLGiftAndRedemptionList) toTarget:self withObject:nil];
+    }else{
+        [self refreshPromtion];
+    }
+}
+
+-(void)refreshPromtion{
+    [giftTable reloadData];
+    [cutoffTable reloadData];
+    [self refreshTableStatus];
+    [self.loadingView hide];
+
+}
+
+
+-(void)requestALLGiftAndRedemptionList{
+    @autoreleasepool {
+        
+        int errorOccur=0;
+        CartService *pServ=[[CartService alloc] init];
+        NSMutableArray*giftMerchantArray=[NSMutableArray array];
+        NSMutableArray* giftProductArray=[NSMutableArray array];
+        NSMutableArray* redemptionMerchantAr=[NSMutableArray array];
+        NSMutableArray* redemptionProductAr=[NSMutableArray array];
+        for (int i=0; i<cartProductArray.count; i++) {
+            NSDictionary* temDic=[cartProductArray objectAtIndex:i];
+            ProductVO* productvo=[temDic valueForKey:@"productVO"];
+            if (productvo.hasGift.intValue) {
+                [giftMerchantArray addObject:productvo.merchantId];
+                [giftProductArray addObject:productvo.productId];
+            }
+            if (productvo.hasRedemption.intValue) {
+                [redemptionMerchantAr addObject:productvo.merchantId];
+                [redemptionProductAr addObject:productvo.productId];
+            }
+        }
+        NSArray *tempArray  = [pServ getGiftList:[GlobalValue getGlobalValueInstance].token
+                                              ];
+        
+        if (tempArray==nil || [tempArray isKindOfClass:[NSNull class]]) {
+            errorOccur++;
+        } else {
+//            [CartCache sharedCartCache].giftArCache=[NSMutableArray arrayWithArray: tempArray];
+            [[CartCache sharedCartCache].giftArCache addObjectsFromArray:tempArray];
+        }
+        [pServ release];
+        CartService*redempPSev=[[CartService alloc] init];
+        NSArray* redempTemp=[redempPSev getRedemptionList:[GlobalValue getGlobalValueInstance].token ];
+        if (redempTemp!=nil&&[redempTemp isKindOfClass:[NSArray class]]) {
+//            [CartCache sharedCartCache].redemptionArCache=[NSMutableArray arrayWithArray:tempArray];
+            [[CartCache sharedCartCache].redemptionArCache addObjectsFromArray:redempTemp];
+        }else{
+            errorOccur++;
+        }
+        [redempPSev release];
+        if (errorOccur==2) {
+            [self performSelectorOnMainThread:@selector(netError) withObject:nil waitUntilDone:NO];
+//            NSMutableDictionary* dic=[NSMutableDictionary dictionaryWithObject:@"error" forKey:@"error"];
+//            [[NSNotificationCenter defaultCenter] postNotificationName:@"RECIVE_PROMOTION_DATA" object:dic];
+            
+        }else {
+            SharedDelegate.needCachedPromotion=NO;
+            [self performSelectorOnMainThread:@selector(refreshPromtion) withObject:nil waitUntilDone:NO];
+        }
+    }
+}
+-(void)netError{
+    [self.loadingView hide];
+    [AlertView showAlertView:nil alertMsg:@"网络异常，请检查网络配置..." buttonTitles:nil
+                    alertTag:ALERTVIEW_TAG_COMMON];
+}
+
+-(void)addPromotionToCart:(ProductVO*)product type:(int)type{
+    __block AddProductResult* reuslt=nil;
+    [self performInThreadBlock:^{
+        CartService*ser=[[CartService alloc] init];
+        reuslt=[[ser addPromotionProduct:[GlobalValue getGlobalValueInstance].token productId:product.productId merchantId:product.merchantId quantity:product.quantity promotionid:product.promotionId] retain];
+        
+    } completionInMainBlock:^{
+        
+        
+        if (reuslt.resultCode.intValue==1) {
+//            [[NSNotificationCenter defaultCenter] postNotificationName:@"cartchanged" object:nil];
+            SharedDelegate.m_UpdateCart=YES;
+            [self naviBack];
+//            [self performInThreadBlock:^{
+//                CartService*cs=[[CartService alloc] init];
+//                
+//                if (type==0) {
+//                    NSArray* tempArr=[cs getGiftList:[GlobalValue getGlobalValueInstance].token];
+//                    if (tempArr!=nil&&[tempArr isKindOfClass:[NSArray class]]) {
+//                        [[CartCache sharedCartCache].giftArCache removeAllObjects];
+//                        [[CartCache sharedCartCache].giftArCache addObjectsFromArray:tempArr];
+//                    }
+//                }else{
+//                    NSArray* tempArr=[cs getRedemptionList:[GlobalValue getGlobalValueInstance].token];
+//                    if (tempArr!=nil&&[tempArr isKindOfClass:[NSArray class]]) {
+//                        NSMutableDictionary* dic=[NSMutableDictionary dictionaryWithObject:product forKey:@"productVO"];
+//                        [dic setObject:[NSNumber numberWithInt:1] forKey:@"productCount"];
+//                        [currentRedemptionArray addObject:dic];
+//                        [[CartCache sharedCartCache].redemptionArCache removeAllObjects];
+//                        [[CartCache sharedCartCache].redemptionArCache addObjectsFromArray:tempArr];
+//                    }
+//                }
+//                
+//            } completionInMainBlock:^{
+//                [self refreshPromtion];
+//            }];
+        }else{
+            [self performSelectorOnMainThread:@selector(netError) withObject:nil waitUntilDone:NO];
+        }
+        [reuslt release];
+    }];
+}
+
+#pragma mark inner method
+-(void)naviBack{
+//    BOOL needFresh=NO;
+//    //数量不同,必须刷新
+//    [selectedGiftArray addObjectsFromArray:selRedemptArray];
+//    [currentSelectdGiftArray addObjectsFromArray:currentRedemptionArray];
+//    if (selectedGiftArray.count!=currentSelectdGiftArray.count) {
+//        needFresh=YES;
+//    }else{
+//        //相同数量的时候，判断内容是否一样
+//        int count=selectedGiftArray.count;
+//        for (NSDictionary*dic in currentSelectdGiftArray) {
+//            ProductVO*productVO=[dic objectForKey:@"productVO"];
+//            for (NSDictionary*tempDic in selectedGiftArray) {
+//                ProductVO*tempVO=[tempDic objectForKey:@"productVO"];
+//                if ([productVO.productId longValue]==[tempVO.productId longValue]&&[productVO.promotionId isEqualToString:tempVO.promotionId]) {
+//                    count--;
+//                }
+//            }
+//        }
+//        if (count>0) {
+//            needFresh=YES;
+//        }
+//    }
+//    if (needFresh) {
+//        [self showLoading];
+//        [self otsDetatchMemorySafeNewThreadSelector:@selector(updateGiftInCart) toTarget:self withObject:nil];
+//    }else{
+    if (SharedDelegate.m_UpdateCart) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"cartload" object:nil];
+    }
+        [self dismissPromotion];
+//    }
+}
+-(void)dismissPromotion{
+    CATransition *animation=[CATransition animation];
+	[animation setDuration:0.3f];
+	[animation setTimingFunction:UIViewAnimationCurveEaseInOut];
+    [animation setType:kCATransitionReveal];
+    [animation setSubtype: kCATransitionFromBottom];
+	[self.view.superview.layer addAnimation:animation forKey:@"Reveal"];
+    [self removeSelf];
+}
+
+-(void)showCutoff{
+    if (!cutoffBtn.selected){
+        cutoffBtn.selected=YES;
+        cutoffTable.hidden=NO;
+        giftTable.hidden=YES;
+        giftBtn.selected=NO;
+    }
+}
+
+-(void)showGift{
+    if (!giftBtn.selected){
+        giftBtn.selected=YES;
+        giftTable.hidden=NO;
+        cutoffTable.hidden=YES;
+        cutoffBtn.selected=NO;
+    }
+}
+
+-(void)hasSelectGift:(ProductVO*)productvo InSection:(NSIndexPath*)selectedIndexPath{
+    MobilePromotionVO*mobileProVO=(MobilePromotionVO*)
+    [OTSUtility safeObjectAtIndex:selectedIndexPath.section inArray:[CartCache sharedCartCache].giftArCache];
+    
+    for (ProductVO*proVO in mobileProVO.productVOList) {
+        ProductVO*deleteProVo=nil;
+        for (NSDictionary* selDic in currentSelectdGiftArray) {
+            ProductVO*selProVO=[selDic valueForKey:@"productVO"];
+            if ([selProVO.productId longValue]==[proVO.productId longValue]&&[selProVO.promotionId isEqualToString:proVO.promotionId]) {
+                deleteProVo=selProVO;
+            }
+        }
+        [self removeSelectedProduct:deleteProVo];
+        
+    }
+}
+#pragma mark redemption delegate
+-(void)didSelectRedemption:(ProductVO *)product{
+    [self.loadingView showInView:self.view];
+    [self addPromotionToCart:product type:1];
+}
+-(void)didSelectRedemption:(NSArray*)selRedemptionArray indexPath:(NSIndexPath*)selIndexPath{
+    NSMutableArray* tempArray=[NSMutableArray arrayWithArray:selRedemptionArray];
+    [self cleanSameSectionProductsForIndexPath:selIndexPath];
+    NSDictionary* dic=nil;
+    for (NSDictionary*redDic in tempArray) {
+        ProductVO*pvo=[redDic valueForKey:@"productVO"];
+        if (![self hasSameRedemption:pvo]) {
+            [currentRedemptionArray addObject:redDic];
+            dic=redDic;
+        }
+    }
+    if (dic!=nil) {
+        ProductVO* product=[dic valueForKey:@"productVO"];
+        [self.loadingView showInView:self.view];
+        [self addPromotionToCart:product type:1];
+    }
+    DebugLog(@"%d",currentRedemptionArray.count);
+    
+//    [cutoffTable reloadData];
+}
+
+-(void)cleanSameSectionProductsForIndexPath:(NSIndexPath*)indexPath{
+    MobilePromotionVO*mpvo=[OTSUtility safeObjectAtIndex:indexPath.section inArray:[CartCache sharedCartCache].redemptionArCache];
+    for (ProductVO* productVo in mpvo.productVOList) {
+        //        遍历当前section内促销商品，从以选择中全部清掉，然后再添加代理返回的选择
+        NSDictionary*tagDic=nil;
+        for (NSDictionary*redDic in currentRedemptionArray) {
+            ProductVO*tmpVO=[redDic objectForKey:@"productVO"];
+            if ([tmpVO.productId longValue]==[productVo.productId longValue]&&[tmpVO.promotionId isEqualToString:productVo.promotionId]) {
+                tagDic=redDic;
+                break;
+            }
+        }
+        if (tagDic!=nil) {
+            [currentRedemptionArray removeObject:tagDic];
+        }
+    }
+    for (ProductVO* productVo in mpvo.productVOList) {
+        //        遍历当前section内促销商品，从以选择中全部清掉，然后再添加代理返回的选择
+        NSDictionary*tagDic=nil;
+        for (NSDictionary*redDic in currentSelectdGiftArray) {
+            ProductVO*tmpVO=[redDic objectForKey:@"productVO"];
+            if ([tmpVO.productId longValue]==[productVo.productId longValue]&&[tmpVO.promotionId isEqualToString:productVo.promotionId]) {
+                tagDic=redDic;
+                break;
+            }
+        }
+        if (tagDic!=nil) {
+            [currentSelectdGiftArray removeObject:tagDic];
+        }
+    }
+
+    
+
+}
+-(BOOL)currentSelectedRedemption:(ProductVO*)prdVO{
+    return NO;
+}
+-(void)removeRedemption:(ProductVO*)prdVO{
+    NSDictionary* tmpDic=nil;
+    for (NSDictionary* dic in currentRedemptionArray) {
+        ProductVO*pvo=[dic valueForKey:@"productVO"];
+        if ([prdVO.productId longValue]==[pvo.productId longValue]&&[prdVO.promotionId isEqualToString:pvo.promotionId]) {
+            tmpDic=dic;
+            break;
+        }
+    }
+    if (tmpDic!=nil) {
+        [currentRedemptionArray removeObject:tmpDic];
+    }
+}
+-(BOOL)hasSameRedemption:(ProductVO*)newProductVO{
+    DebugLog(@"%d",currentRedemptionArray.count);
+    if (currentRedemptionArray.count) {
+        DebugLog(@"%@",[[currentRedemptionArray objectAtIndex:0] class]);
+    }
+    for (NSDictionary* tagDci in currentRedemptionArray) {
+        ProductVO* tagPVO=[tagDci valueForKey:@"productVO"];
+        DebugLog(@"%@===%@====   ==%@====%@",tagPVO.productId,newProductVO.productId,tagPVO.promotionId,newProductVO.promotionId);
+        if ([tagPVO.productId longValue]==[newProductVO.productId longValue]&&[tagPVO.promotionId isEqualToString:newProductVO.promotionId]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+-(NSDictionary*)hasSelectedRedemptionInSection:(NSInteger)section{
+    NSDictionary*theProduct=nil;
+    for (NSDictionary* dic in currentRedemptionArray) {
+        ProductVO*theVo=[dic valueForKey:@"productVO"];
+        MobilePromotionVO*mobileProVO=(MobilePromotionVO*)
+        [OTSUtility safeObjectAtIndex:section inArray:[CartCache sharedCartCache].redemptionArCache];
+        //                当前section有无选中商品
+        for (ProductVO*pvo in mobileProVO.productVOList) {
+            if ([pvo.productId longValue]==[theVo.productId longValue]&&[pvo.promotionId isEqualToString:theVo.promotionId]) {
+                theProduct=dic;
+            }
+        }
+    }
+    return theProduct;
+}
+#pragma mark gift
+-(BOOL)hasSelectedProduct:(ProductVO *)theProductVO
+{
+    BOOL hasProduct=NO;
+    int i;
+    for (i=0; i<[currentSelectdGiftArray count]; i++) {
+        NSMutableDictionary *mDictionary=[currentSelectdGiftArray objectAtIndex:i];
+        ProductVO *productVO=[mDictionary objectForKey:@"productVO"];
+        if ([[productVO productId] longValue]==[[theProductVO productId] longValue]&&[productVO.promotionId isEqualToString:theProductVO.promotionId]) {
+            hasProduct=YES;
+            break;
+        }
+    }
+    return hasProduct;
+}
+
+-(void)addSelectedProduct:(ProductVO *)theProductVO
+{
+    BOOL hasProduct=[self hasSelectedProduct:theProductVO];
+    if (!hasProduct) {
+        NSMutableDictionary *mDictionary=[[NSMutableDictionary alloc] init];
+        [mDictionary setObject:theProductVO forKey:@"productVO"];
+        [currentSelectdGiftArray addObject:mDictionary];
+        [mDictionary release];
+    }
+}
+-(void)removeSelectedProduct:(ProductVO*)theProductVO{
+    NSDictionary* tagDic=nil;
+    for (NSDictionary* dic in currentSelectdGiftArray) {
+        ProductVO*pVo=[dic valueForKey:@"productVO"];
+        if ([pVo.productId longValue]==[theProductVO.productId longValue]&&[pVo.promotionId isEqualToString:theProductVO.promotionId]) {
+            tagDic=dic;
+            break;
+        }
+    }
+    if (tagDic!=nil) {
+        [currentSelectdGiftArray removeObject:tagDic];
+    }
+}
+
+-(void)updateGiftInCart{
+    @autoreleasepool {
+        ProductService *pServ=[[ProductService alloc] init];
+        
+        NSMutableArray *productIdArray=[[NSMutableArray alloc] init];
+        NSMutableArray *promotionIdArray=[[NSMutableArray alloc] init];
+        NSMutableArray *merchantIdArray=[[NSMutableArray alloc] init];
+        NSMutableArray *quantityArray=[[NSMutableArray alloc] init];
+        
+        if ([GlobalValue getGlobalValueInstance].token!=nil) {
+            int i;
+            for (i=0; i<[currentSelectdGiftArray count]; i++) {
+                NSMutableDictionary *mDictionary=[currentSelectdGiftArray objectAtIndex:i];
+                ProductVO *productVO=[mDictionary objectForKey:@"productVO"];
+                [productIdArray addObject:[NSNumber numberWithInt:[productVO.productId intValue]]];
+                [promotionIdArray addObject:[NSString stringWithString:productVO.promotionId]];
+                [merchantIdArray addObject:[NSNumber numberWithInt:[productVO.merchantId intValue]]];
+                [quantityArray addObject:[NSNumber numberWithInt:[productVO.quantity intValue]]];
+            }
+            int result=[pServ updateCartPromotion:[GlobalValue getGlobalValueInstance].token
+                               giftProductIdList:productIdArray
+                                 promotionIdList:promotionIdArray
+                                  merchantIdList:merchantIdArray
+                                    quantityList:quantityArray
+                                             Type:1];
+            [self performSelectorOnMainThread:@selector(showReceiveGiftResult:) withObject:[NSNumber numberWithInt:result] waitUntilDone:NO];
+        }
+        [productIdArray release];
+        [promotionIdArray release];
+        [merchantIdArray release];
+        [quantityArray release];
+        [pServ release];
+    }
+}
+-(void)showReceiveGiftResult:(NSNumber *)result
+{
+    //[[NSNotificationCenter defaultCenter] postNotificationName:@"MainWindowHideLoading" object:nil];
+    [self hideLoading];
+    if ([result intValue]!=1) {
+        [AlertView showAlertView:nil alertMsg:@"领取赠品失败" buttonTitles:nil alertTag:ALERTVIEW_TAG_COMMON];
+    } else {
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"cartload" object:nil];
+        [self dismissPromotion];
+    }
+}
+
+#pragma mark tableview
+-(NSInteger)numberOfSectionsInTableView:(UITableView *)tableView{
+    if (tableView==giftTable)
+        return [CartCache sharedCartCache].giftArCache.count;
+    else
+        return [CartCache sharedCartCache].redemptionArCache.count;
+}
+-(NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section{
+    if (tableView==giftTable){
+        MobilePromotionVO*mobileProVO=(MobilePromotionVO*)
+        [OTSUtility safeObjectAtIndex:section inArray:[CartCache sharedCartCache].giftArCache];
+        return mobileProVO.productVOList.count;
+    }
+    else{
+        MobilePromotionVO*mobileProVO=(MobilePromotionVO*)[OTSUtility safeObjectAtIndex:section inArray:[CartCache sharedCartCache].redemptionArCache];
+        if (mobileProVO.productVOList.count>3) {
+            return 3;
+        }else{
+            return mobileProVO.productVOList.count;
+        }
+    }
+    
+}
+
+-(UITableViewCell*)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
+    static NSString* gift=@"giftcell";
+    static NSString* cutoff=@"cutoffcell";
+    DebugLog(@"%@",indexPath);
+    if (tableView==giftTable) {
+        PromotionCell*cell=[tableView dequeueReusableCellWithIdentifier:gift];
+        if (cell==nil) {
+            cell=[[[PromotionCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:gift] autorelease];
+        }
+        MobilePromotionVO*mobileProVO=(MobilePromotionVO*)
+        [OTSUtility safeObjectAtIndex:indexPath.section inArray:[CartCache sharedCartCache].giftArCache];
+        ProductVO*productvo=(ProductVO*)
+        [OTSUtility safeObjectAtIndex:indexPath.row inArray:mobileProVO.productVOList];
+        cell.tittleLabel.text=productvo.cnName;
+        cell.priceLab.text=[NSString stringWithFormat:@"¥ %.2f",[productvo.price doubleValue]];
+        //cell.marketPriceLbl.text=[NSString stringWithFormat:@"¥ %.2f",[productvo.maketPrice doubleValue]];
+        cell.conditionLab.text=productvo.totalQuantityLimit;
+        if ([self hasSelectedProduct:productvo]) {
+            cell.checkImg.image=[UIImage imageNamed:@"goodReceiver_sel.png"];
+        }else{
+            cell.checkImg.image=[UIImage imageNamed:@"goodReceiver_unsel.png"];
+        }
+        cell.flogyView.hidden=YES;
+        cell.notEnough.hidden=YES;
+        cell.userInteractionEnabled=YES;
+        if (![mobileProVO.canJoin intValue]) {
+            [cell canNotJoin];
+        }
+        if ([productvo.isSoldOut intValue]) {
+            [cell hasNoMore];
+        }
+        [cell productIcon:productvo.miniDefaultProductUrl];
+
+        return cell;
+    }
+    else{
+        MobilePromotionVO*mpVO=[OTSUtility safeObjectAtIndex:indexPath.section inArray:[CartCache sharedCartCache].redemptionArCache];
+        if (indexPath.row<2) {
+            PromotionCell*cell=[tableView dequeueReusableCellWithIdentifier:cutoff];
+            if (cell==nil) {
+                cell=[[[PromotionCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cutoff] autorelease];
+            }
+            ProductVO*productVO=
+            [OTSUtility safeObjectAtIndex:indexPath.row inArray:mpVO.productVOList];
+            cell.tittleLabel.text=productVO.cnName;
+            cell.priceLab.text=[NSString stringWithFormat:@"¥ %.2f",[productVO.promotionPrice doubleValue]];
+            //cell.marketPriceLbl.text=[NSString stringWithFormat:@"¥ %.2f",[productVO.maketPrice doubleValue]];
+            cell.conditionLab.text=[NSString stringWithFormat:@"%@",productVO.totalQuantityLimit];
+            if ([self hasSameRedemption:productVO]) {
+                cell.checkImg.image=[UIImage imageNamed:@"goodReceiver_sel.png"];
+            }else{
+                cell.checkImg.image=[UIImage imageNamed:@"goodReceiver_unsel.png"];
+            }
+            
+            if ([mpVO.canJoin intValue] && ![productVO.isSoldOut intValue]) {
+                cell.notEnough.hidden=YES ;
+                cell.flogyView.hidden=YES;
+                cell.userInteractionEnabled=YES;
+            }else{
+                cell.notEnough.hidden=NO ;
+                cell.flogyView.hidden=NO;
+                cell.userInteractionEnabled=NO;
+            }
+
+            [cell productIcon:productVO.miniDefaultProductUrl];
+            return cell;
+        }else{
+            UITableViewCell*cell=[tableView dequeueReusableCellWithIdentifier:@"more"];
+            if (cell==nil) {
+                cell=[[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"more"] autorelease];
+            }
+            cell.textLabel.text=[NSString stringWithFormat:@"共%d件",mpVO.productVOList.count];
+            cell.textLabel.font=[UIFont systemFontOfSize:14];
+            cell.detailTextLabel.text=@"查看全部";
+            cell.detailTextLabel.font=[UIFont systemFontOfSize:14];
+            cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
+            return cell;
+        }
+    }
+}
+
+
+
+-(void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath{
+    if (tableView==giftTable) {
+        MobilePromotionVO*mobileProVO=(MobilePromotionVO*)
+        [OTSUtility safeObjectAtIndex:indexPath.section inArray:[CartCache sharedCartCache].giftArCache];
+        ProductVO*productvo=(ProductVO*)[OTSUtility safeObjectAtIndex:indexPath.row inArray:mobileProVO.productVOList];
+        [self addPromotionToCart:productvo type:0];
+
+    }else{
+        MobilePromotionVO* mpvo=[OTSUtility safeObjectAtIndex:indexPath.section inArray:[CartCache sharedCartCache].redemptionArCache];
+        if (indexPath.row==2) {
+            RedemptionListViewController*redemption=[[RedemptionListViewController alloc] init];
+            redemption.delegate=self;
+            redemption.mobilePromotionVO=mpvo;
+            redemption.fromIndex=indexPath;
+            redemption.selectedRedemptionArray=currentRedemptionArray;
+            [self pushVC:redemption animated:YES fullScreen:YES];
+            return;
+        }
+        ProductVO* selPVO=[OTSUtility safeObjectAtIndex:indexPath.row inArray:[mpvo productVOList]];
+        [self addPromotionToCart:selPVO type:1];
+    }
+    SharedDelegate.m_UpdateCart=YES;
+    [self.loadingView showInView:self.view];
+}
+/*
+-(void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath{
+    if (tableView==giftTable) {
+        MobilePromotionVO*mobileProVO=(MobilePromotionVO*)
+        [OTSUtility safeObjectAtIndex:indexPath.section inArray:[CartCache sharedCartCache].giftArCache];
+        
+        ProductVO*productvo=(ProductVO*)[OTSUtility safeObjectAtIndex:indexPath.row inArray:mobileProVO.productVOList];
+        
+        if ([self hasSelectedProduct:productvo]) {
+            [self removeSelectedProduct:productvo];
+        }else{
+            [self hasSelectGift:productvo InSection:indexPath];
+            [self addSelectedProduct:productvo];
+        }
+        [tableView reloadData];
+    }else{
+        [tableView deselectRowAtIndexPath:indexPath animated:YES];
+        MobilePromotionVO* mpvo=[OTSUtility safeObjectAtIndex:indexPath.section inArray:[CartCache sharedCartCache].redemptionArCache];
+        
+        if (indexPath.row==2) {
+            RedemptionListViewController*redemption=[[RedemptionListViewController alloc] init];
+            redemption.delegate=self;
+            redemption.mobilePromotionVO=mpvo;
+            redemption.fromIndex=indexPath;
+            redemption.selectedRedemptionArray=currentRedemptionArray;
+            [self pushVC:redemption animated:YES fullScreen:YES];
+        }
+        (@"selectedRede.count     %d",currentRedemptionArray.count);
+        ProductVO* selPVO=[OTSUtility safeObjectAtIndex:indexPath.row inArray:[mpvo productVOList]];
+
+        NSDictionary* tmpdic=[NSDictionary dictionaryWithObject:selPVO forKey:@"productVO"];
+        if (![self hasSameRedemption:selPVO]) {
+            [self cleanSameSectionProductsForIndexPath:indexPath];
+            [currentRedemptionArray addObject:tmpdic];
+        }else{
+            [self removeRedemption:selPVO];
+//            [currentRedemptionArray removeObject:tmpdic];
+        }
+        [cutoffTable reloadData];
+    }
+}
+
+*/
+-(CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
+    if (tableView!=giftTable) {
+        if (indexPath.row==2) {
+            return 44;
+        }
+    }
+    return 90;
+}
+
+-(UIView*)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section{
+    UIView* v=[[UIView alloc] initWithFrame:CGRectMake(0, 0, 320, 40)];
+    v.backgroundColor=[UIColor colorWithPatternImage:[UIImage imageNamed:@"cutoff_sectionBG.png"]];
+    if (tableView==giftTable) {
+        MobilePromotionVO*mobliePromotionVo=(MobilePromotionVO*)[OTSUtility safeObjectAtIndex:section inArray:[CartCache sharedCartCache].giftArCache];
+        UILabel* title=[[UILabel alloc] initWithFrame:CGRectMake(10, 0, 200, 20)];
+        title.text=mobliePromotionVo.title;
+        title.font=[UIFont systemFontOfSize:16];
+        title.backgroundColor=[UIColor clearColor];
+        [v addSubview:title];
+        [title release];
+        
+        UILabel* des=[[UILabel alloc] initWithFrame:CGRectMake(10, 20, 270, 20)];
+        des.text=mobliePromotionVo.description;
+        des.font=[UIFont systemFontOfSize:14];
+        des.textColor=[UIColor grayColor];
+        des.backgroundColor=[UIColor clearColor];
+        [v addSubview:des];
+        [des release];
+
+        if (![mobliePromotionVo.canJoin intValue]) {
+            UILabel*join=[[UILabel alloc] initWithFrame:CGRectMake(210, 0, 100, 40)];
+            join.text=@"未满足";
+            join.textColor=[UIColor colorWithRed:0.686 green:0.078 blue:0.01 alpha:1];
+            join.textAlignment=UITextAlignmentRight;
+            join.font=[UIFont systemFontOfSize:14];
+            join.backgroundColor=[UIColor clearColor];
+            [v addSubview:join];
+            [join release];
+        }
+    }else{
+        MobilePromotionVO*mobliePromotionVo=(MobilePromotionVO*)
+        [OTSUtility safeObjectAtIndex:section inArray:[CartCache sharedCartCache].redemptionArCache];
+        UILabel* title=[[UILabel alloc] initWithFrame:CGRectMake(10, 0, 230, 20)];
+        title.text=mobliePromotionVo.title;
+        title.font=[UIFont systemFontOfSize:15];
+        title.backgroundColor=[UIColor clearColor];
+        [v addSubview:title];
+        [title release];
+        
+        UILabel* des=[[UILabel alloc] initWithFrame:CGRectMake(10, 20, 270, 20)];
+        des.text=mobliePromotionVo.description;
+        des.font=[UIFont systemFontOfSize:14];
+        des.textColor=[UIColor grayColor];
+        des.backgroundColor=[UIColor clearColor];
+        [v addSubview:des];
+        [des release];
+
+        
+        
+        if (![mobliePromotionVo.canJoin intValue]) {
+            UILabel*join=[[UILabel alloc] initWithFrame:CGRectMake(210, 0, 100, 40)];
+            join.text=@"未满足";
+            join.textColor=[UIColor colorWithRed:0.686 green:0.078 blue:0.01 alpha:1];
+            join.textAlignment=UITextAlignmentRight;
+            join.font=[UIFont systemFontOfSize:14];
+            join.backgroundColor=[UIColor clearColor];
+            [v addSubview:join];
+            [join release];
+        }else{
+            NSDictionary*productDic=[self hasSelectedRedemptionInSection:section];
+            ProductVO*product=[productDic valueForKey:@"productVO"];
+            int count=[[productDic valueForKey:@"productCount"] intValue];
+            if (product!=nil) {
+                UILabel*price=[[UILabel alloc] initWithFrame:CGRectMake(320-50, 0, 50, 40)];
+                price.textColor=[UIColor colorWithRed:0.686 green:0.078 blue:0.01 alpha:1];
+                price.text=[NSString stringWithFormat:@"¥%@",product.promotionPrice];
+                price.backgroundColor=[UIColor clearColor];
+                price.font=[UIFont systemFontOfSize:14];
+                price.adjustsFontSizeToFitWidth=YES;
+                [v addSubview:price];
+                [price release];
+                
+                UILabel*countLab=[[UILabel alloc] initWithFrame:CGRectMake(320-50-50, 0, 50, 40)];
+                countLab.textColor=[UIColor grayColor];
+                if ([product.quantity intValue]) {
+                    countLab.text=[NSString stringWithFormat:@"%@个 | ",product.quantity];
+                }else if(count>0){
+                    countLab.text=[NSString stringWithFormat:@"%d个 | ",count];
+                }else{
+                    countLab.text=@"1个 | ";
+                }
+                countLab.backgroundColor=[UIColor clearColor];
+                countLab.font=[UIFont systemFontOfSize:14];
+                countLab.textAlignment=UITextAlignmentRight;
+                [v addSubview:countLab];
+                [countLab release];
+            }
+        }
+
+    }
+    return [v autorelease];
+
+}
+
+-(CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section{
+    return 40;
+}
+
+
+
+- (void)didReceiveMemoryWarning
+{
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+@end

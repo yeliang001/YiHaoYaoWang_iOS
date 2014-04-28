@@ -1,0 +1,17 @@
+//
+//  YWFavoriteService.h
+//  TheStoreApp
+//
+//  Created by LinPan on 13-8-17.
+//
+//
+
+#import "BaseService.h"
+@class FavoriteResultInfo;
+@interface YWFavoriteService : BaseService
+
+
+- (BOOL)addFavorite:(NSDictionary *)paramDic;
+- (FavoriteResultInfo *)getMyFavoriteList:(NSDictionary *)paramDic;
+- (BOOL)delFavorite:(NSDictionary *)paramDic;
+@end

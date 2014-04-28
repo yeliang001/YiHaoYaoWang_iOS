@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="4510" systemVersion="13B42" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none">
+    <dependencies>
+        <deployment defaultVersion="1296" identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="3742"/>
+    </dependencies>
+    <objects>
+        <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="UseHelp">
+            <connections>
+                <outlet property="HowRecAndRejectProduct" destination="11" id="31"/>
+                <outlet property="HowReturnProduct" destination="52" id="57"/>
+                <outlet property="NoRecProduct" destination="13" id="30"/>
+                <outlet property="PhoneBuyProduct" destination="12" id="29"/>
+                <outlet property="cancelOrder" destination="16" id="28"/>
+                <outlet property="frontBtnInShowView" destination="36" id="44"/>
+                <outlet property="modifyOrder" destination="15" id="27"/>
+                <outlet property="orderToken" destination="9" id="32"/>
+                <outlet property="postageCalculate" destination="10" id="33"/>
+                <outlet property="returnBtnInMainView" destination="23" id="41"/>
+                <outlet property="selectOrder" destination="14" id="26"/>
+                <outlet property="showView" destination="24" id="34"/>
+                <outlet property="view" destination="1" id="3"/>
+            </connections>
+        </placeholder>
+        <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
+        <view contentMode="scaleToFill" id="1">
+            <rect key="frame" x="0.0" y="0.0" width="320" height="480"/>
+            <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+            <subviews>
+                <imageView userInteractionEnabled="NO" contentMode="scaleToFill" image="title_bg.png" id="18">
+                    <rect key="frame" x="0.0" y="0.0" width="320" height="44"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                </imageView>
+                <label opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="left" text="使用帮助" textAlignment="center" lineBreakMode="tailTruncation" minimumFontSize="10" id="19">
+                    <rect key="frame" x="96" y="7" width="127" height="30"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                    <fontDescription key="fontDescription" name="Helvetica-Bold" family="Helvetica" pointSize="20"/>
+                    <color key="textColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                    <color key="highlightedColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                    <color key="shadowColor" white="0.33333333333333331" alpha="1" colorSpace="calibratedWhite"/>
+                    <size key="shadowOffset" width="1" height="-1"/>
+                </label>
+                <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" showsHorizontalScrollIndicator="NO" showsVerticalScrollIndicator="NO" style="plain" separatorStyle="default" rowHeight="44" sectionHeaderHeight="22" sectionFooterHeight="22" id="20">
+                    <rect key="frame" x="0.0" y="44" width="320" height="391"/>
+                    <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                    <color key="backgroundColor" red="0.93333333330000001" green="0.93333333330000001" blue="0.93333333330000001" alpha="1" colorSpace="calibratedRGB"/>
+                    <connections>
+                        <outlet property="dataSource" destination="-1" id="21"/>
+                        <outlet property="delegate" destination="-1" id="22"/>
+                    </connections>
+                </tableView>
+                <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" id="23">
+                    <rect key="frame" x="0.0" y="0.0" width="61" height="44"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                    <fontDescription key="fontDescription" name="Helvetica-Bold" family="Helvetica" pointSize="13"/>
+                    <size key="titleShadowOffset" width="1" height="-1"/>
+                    <state key="normal" title=" " backgroundImage="title_left_btn.png">
+                        <color key="titleColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                        <color key="titleShadowColor" white="0.33333333333333331" alpha="1" colorSpace="calibratedWhite"/>
+                    </state>
+                    <state key="highlighted" backgroundImage="title_left_btn_sel.png">
+                        <color key="titleColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                    </state>
+                    <connections>
+                        <action selector="returnMoreMainpage:" destination="-1" eventType="touchUpInside" id="40"/>
+                    </connections>
+                </button>
+            </subviews>
+            <color key="backgroundColor" red="0.93333333330000001" green="0.93333333330000001" blue="0.93333333330000001" alpha="1" colorSpace="calibratedRGB"/>
+            <simulatedStatusBarMetrics key="simulatedStatusBarMetrics"/>
+        </view>
+        <view contentMode="scaleToFill" id="5" userLabel="resourceWithUseHelp">
+            <rect key="frame" x="0.0" y="0.0" width="320" height="460"/>
+            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+            <subviews>
+                <label opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="left" text="    A : 您可以在登陆网站后进入“我的1号店”点击“我的订单”进行订单详细的查询。" lineBreakMode="tailTruncation" numberOfLines="3" minimumFontSize="7" id="14">
+                    <rect key="frame" x="10" y="5" width="300" height="54"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                    <fontDescription key="fontDescription" name="Helvetica" family="Helvetica" pointSize="16"/>
+                    <color key="textColor" cocoaTouchSystemColor="darkTextColor"/>
+                    <color key="highlightedColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                </label>
+                <label opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="left" lineBreakMode="tailTruncation" numberOfLines="15" minimumFontSize="6" id="15">
+                    <rect key="frame" x="10" y="67" width="300" height="190"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                    <string key="text">    A : 1号店不提供修改订单功能，请您在提交订单前仔细核对订单信息，确认无误后再提交。如果您确定需要修改订单的具体内容，可做如下操作：    
+   1） 取消您的当前订单。
+   2） 点击重新购买，则系统会将您取消订单中的商品重新放入购物车，按照一般购物流程，选择您需要修改的产品或支付方式，完成订单的修改。 </string>
+                    <fontDescription key="fontDescription" name="Helvetica" family="Helvetica" pointSize="16"/>
+                    <color key="textColor" cocoaTouchSystemColor="darkTextColor"/>
+                    <color key="highlightedColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                </label>
+                <label opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="left" lineBreakMode="tailTruncation" numberOfLines="5" minimumFontSize="10" id="16">
+                    <rect key="frame" x="10" y="314" width="300" height="100"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                    <string key="text">    A : 1） 当您的订单处于“待付款”或“待处理”状态下，可以取消订单。 
+    2） 登陆“我的1号店”点击“我的订单”可以查找您需要取消的订单，点击取消即可。</string>
+                    <fontDescription key="fontDescription" name="Helvetica" family="Helvetica" pointSize="16"/>
+                    <color key="textColor" cocoaTouchSystemColor="darkTextColor"/>
+                    <color key="highlightedColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                </label>
+            </subviews>
+            <color key="backgroundColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+        </view>
+        <view contentMode="scaleToFill" id="6" userLabel="resourceWithUseHelp2">
+            <rect key="frame" x="0.0" y="0.0" width="320" height="460"/>
+            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+            <subviews>
+                <label opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="left" lineBreakMode="tailTruncation" numberOfLines="3" minimumFontSize="10" id="12">
+                    <rect key="frame" x="10" y="0.0" width="300" height="80"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                    <string key="text">  A : 您可以拨打1号店订购电话（400-007-1111）来订购您喜欢的商品，并把相关             信息告诉客服人员即可。
+</string>
+                    <fontDescription key="fontDescription" name="Helvetica" family="Helvetica" pointSize="16"/>
+                    <color key="textColor" cocoaTouchSystemColor="darkTextColor"/>
+                    <color key="highlightedColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                </label>
+                <label opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="left" lineBreakMode="tailTruncation" numberOfLines="20" minimumFontSize="10" id="13">
+                    <rect key="frame" x="10" y="136" width="300" height="270"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                    <string key="text">    A : 1号店拥有智能化的管理系统，您选择的配送方式一定是适用于您的配送地址的；1号店提供明确而便捷的订单配送状态查询功能，您可以随时查看您订单的状态，当发生长时间未收到商品的情况时，请注意查看您的订单状态：
+    1、 请查看您的送货地址是否填写准确，确保收货时间有人接收，若您长时间没有收到商品，或收货地址和时间有误，请及时核实并联系1号店客服人员； 
+    2、 汇款到达但是遇到收货地址不详、汇款金额不足或库存不足的订单，1号店客服人员将联系您。
+</string>
+                    <fontDescription key="fontDescription" name="Helvetica" family="Helvetica" pointSize="16"/>
+                    <color key="textColor" cocoaTouchSystemColor="darkTextColor"/>
+                    <color key="highlightedColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                </label>
+            </subviews>
+            <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="calibratedWhite"/>
+        </view>
+        <view contentMode="scaleToFill" id="7" userLabel="resourceWithUseHelp4">
+            <rect key="frame" x="0.0" y="0.0" width="320" height="460"/>
+            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+            <subviews>
+                <label opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="left" lineBreakMode="tailTruncation" numberOfLines="30" minimumFontSize="10" id="11">
+                    <rect key="frame" x="10" y="21" width="300" height="427"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                    <string key="text">   A : 为保障您的权益，请您付款后即与配送人员当面核对商品种类、数量、规格、赠品、金额等是否与订单一致，商品没有划痕、破损等表面质量问题，准确无误后再进行签收。您或您委托的收货人的签字表示您已确认上述内容无误，1号店有权不接受以此为由的退换货。
+拒收规则：
+    原则上，1号店不接受无理由拒收。在您收到商品后，如对1号店的商品有任何不满意，在商品包装干净，完好且未经拆封，未经使用的前提下，您可以与1号店客服联系提出退货要求，1号店客服人员将对您的退货要求做出判断后方可办理退货处理。
+    如您验收商品时发现商品短缺、配送错误、包装破损、商品存在质量问题等，您可以拒收全部或部分商品，相关的赠品，配件或捆绑商品应一起当场拒收。
+    如同一顾客二次无理由退货，1号店将对其视作“恶意订购”，今后对该顾客帐户仅做款到发货处理，敬请谅解！
+</string>
+                    <fontDescription key="fontDescription" name="Helvetica" family="Helvetica" pointSize="16"/>
+                    <color key="textColor" cocoaTouchSystemColor="darkTextColor"/>
+                    <color key="highlightedColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                </label>
+            </subviews>
+            <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="calibratedWhite"/>
+        </view>
+        <view contentMode="scaleToFill" id="8" userLabel="resourceWithUseHelp1">
+            <rect key="frame" x="0.0" y="0.0" width="320" height="460"/>
+            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+            <subviews>
+                <label opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="left" lineBreakMode="tailTruncation" numberOfLines="12" minimumFontSize="10" id="9">
+                    <rect key="frame" x="10" y="7" width="300" height="180"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                    <string key="text">   A : 当顾客购买了多个产品，其中存在发货时间不同、预售产品、预付订金产品或需要上门服务的产品时，系统会默认将顾客购买的产品按照相近的发货时间拆分成多个订单，如：产品1和产品2的发货时间相近，产品3需要更多时间发货，则产品1和产品2将被放入1个订单，产品3放入另一个订单。顾客可以以最快的速度接收到所购买的产品。 
+</string>
+                    <fontDescription key="fontDescription" name="Helvetica" family="Helvetica" pointSize="16"/>
+                    <color key="textColor" cocoaTouchSystemColor="darkTextColor"/>
+                    <color key="highlightedColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                </label>
+                <label opaque="NO" clipsSubviews="YES" userInteractionEnabled="NO" contentMode="left" lineBreakMode="tailTruncation" numberOfLines="15" minimumFontSize="10" id="10">
+                    <rect key="frame" x="10" y="213" width="300" height="227"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                    <string key="text">    A : 上海地区（除崇明、横沙、长兴三岛外）、北京地区订单拆分前，购物金额满100元的，由1号店承担拆分后的配送费用； 如果子订单不满100，拆分订单可能会产生额外费用。     顾客也可以选择等待统一发送。     订单购物金额满100元且送货范围为上海（除崇明、横沙，长兴三岛外）、北京，免邮费； 由于1号店的原因不能按照预计的发货时间发货，造成订单的拆分，此时产生的拆单邮费由1号店承担； 
+</string>
+                    <fontDescription key="fontDescription" name="Helvetica" family="Helvetica" pointSize="16"/>
+                    <color key="textColor" cocoaTouchSystemColor="darkTextColor"/>
+                    <color key="highlightedColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                </label>
+            </subviews>
+            <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="calibratedWhite"/>
+        </view>
+        <view contentMode="scaleToFill" id="24" userLabel="showView">
+            <rect key="frame" x="0.0" y="0.0" width="320" height="460"/>
+            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+            <subviews>
+                <imageView userInteractionEnabled="NO" contentMode="scaleToFill" image="title_bg.png" id="35">
+                    <rect key="frame" x="0.0" y="0.0" width="320" height="44"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                </imageView>
+                <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" id="36">
+                    <rect key="frame" x="0.0" y="0.0" width="61" height="44"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                    <fontDescription key="fontDescription" name="Helvetica-Bold" family="Helvetica" pointSize="13"/>
+                    <size key="titleShadowOffset" width="1" height="-1"/>
+                    <state key="normal" backgroundImage="title_left_btn.png">
+                        <color key="titleColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                        <color key="titleShadowColor" white="0.33333333333333331" alpha="1" colorSpace="calibratedWhite"/>
+                    </state>
+                    <state key="highlighted" backgroundImage="title_left_btn_sel.png">
+                        <color key="titleColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                    </state>
+                    <connections>
+                        <action selector="returnFront:" destination="-1" eventType="touchUpInside" id="38"/>
+                    </connections>
+                </button>
+                <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" id="50">
+                    <rect key="frame" x="259" y="0.0" width="61" height="44"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                    <fontDescription key="fontDescription" name="Helvetica-Bold" family="Helvetica" pointSize="13"/>
+                    <size key="titleShadowOffset" width="1" height="-1"/>
+                    <state key="normal" title="更多" backgroundImage="title_right_btn.png">
+                        <color key="titleColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                        <color key="titleShadowColor" white="0.33333333333333331" alpha="1" colorSpace="calibratedWhite"/>
+                    </state>
+                    <state key="highlighted">
+                        <color key="titleColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                    </state>
+                    <connections>
+                        <action selector="returnFront:" destination="-1" eventType="touchUpInside" id="51"/>
+                    </connections>
+                </button>
+            </subviews>
+            <color key="backgroundColor" red="0.93333333330000001" green="0.93333333330000001" blue="0.93333333330000001" alpha="1" colorSpace="calibratedRGB"/>
+        </view>
+        <view contentMode="scaleToFill" id="45" userLabel="resoure">
+            <rect key="frame" x="0.0" y="0.0" width="320" height="460"/>
+            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+            <subviews>
+                <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" id="52">
+                    <rect key="frame" x="10" y="47" width="300" height="367"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                    <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="calibratedWhite"/>
+                    <mutableString key="text">  A : 1．1号店承诺符合以下情况，商品因质量问题，自售出之日（以实际收货日期为准）起7日内可以退货，15日内可以换货，客户可登陆"我的1号店—我的订单"点击"申请退换货""自助完成退换货申A.国家《三包》法规所规定的非人为质量问题；B.经由生产厂家指定或特约售后服务中心检测确认，并出具检测报告（如售后服务中心无法提供检测报告，则需提供商品检测或故障单）；C.商品外包装完整未损坏，商品及其标配配件、赠品（如购买时有赠品）、说明书、保修凭证和发票均齐全D.如果成套商品（含赠品）中有部分商品存在质量问题，在办理退换货时，必须提供成套商品运费说明：自客户收到商品起7日内因质量问题退货；15日内因质量问题换货，通过快递寄回商品而产生的运费将以返利方式退至客户1号店账户中（不承担保价和当天件产生的费用）2.以下情况1号店恕不提供退换货服务：A.任何非由1号店出售的商品（商品序列号不符合）；B.超过国家《三包》法规中规定的退换货的有效期；C.商品已使用（有质量问题除外）或为正常使用磨损；D.商品外包装不完整或损坏，标配配件、赠品（如购买时有赠品）或说明书不完整，保修凭证和发票任一缺失或涂改，保修凭证上的商品型号或序列号与商品实物不符；E.擅自撕毁或涂改商品标贴、序列号、防伪标记；F.未经授权的疏忽、误用、滥用、拆装、碰撞、进液、事故、改动、不正确的安装或保管而导致的商品质量问题；G.由非生产厂商指定或授权维修点进行拆装或维修而导致的商品质量问题；服务承诺：1号店售后部门在收到客户寄回的商品起15个工作日之内完成退换货申请的处理。*特殊商品如有另行规定，以商品页面保修条款中的保修政策为准。 温馨提示：1.商品质量问题检测提醒a.如由1号店代开检测报告耗时过长而会错过7日（退货）或15日（换货）的退换货时间。为保证客户售后权益，1号店建议客户自行到厂商售后服务中心进行检测并开具检测报告。b.自客户收到商品起15日以上如商品出现质量问题，为了不耽误客户使用，缩短故障商品的维修时间，我们建议您直接联系生产厂商在当地的售后服务网点进行处理。您可以通过在商品的保修卡中查找、拨打厂商客户服务热线咨询或访问厂商官方网站等方式以获得售后服务网点信息。2.在将保修商品寄回1号店前，请注意如下事项：a.客户在寄回商品前请检查不属于商品标配的配件（例如手机SIM卡、手机配饰等）是否及时移出，否则若出现遗失或损坏，1号店不承担相应的责任。b.对于存储类商品（包括但不限于硬盘、移动硬盘、闪存盘、存储卡、台式机/笔记本电脑、平板电脑、手机、数码相机、MP3/MP4播放器以及带有内部存储功能的商品），1号店不提供数据导出服务，请在寄回前将内部的数据自行导出，否则若出现数据遗失或损坏，1号店不承担相应的责任。1）请您将所有寄回的商品及相关附件都置于在一个邮包中，寄回商品必须具备良好的包装（包括外包装箱/袋和包裹填充物），您可以重新使用1号店发货时的包装材料。如包裹内部发出碰撞声或小件物品零散置于包裹中，请您务必放入足够的填充物，从而避免您寄回时因发生货损而导致的经济损失。2）请按照以下信息详细记录（包括客户姓名、订单号、该订单收件人联系方式），并将此清单随同寄回的商品一并置于包裹中，以便1号店售后部门在收到货后第一时间处理。c.在不违反国家《三包》法规的前提下，1号店对商品退换原则保留最终解释权。为保障您的权益，请您在收货时注意以下环节： 1. 签收时在付款后与配送人员当面核对：商品及配件、应付金额、商品数量及发货清单、发票（如有）、赠品（如有）等2. 如存在包装破损、商品错误、商品短缺、商品存在质量问题等影响签收的因素，请您可以拒收全部或部分商品，相关的赠品，配件或捆绑商品应一起当场拒收。3.为了保护您的权益，建议您尽量不要委托他人代为签收；如由他人代为签收商品而没有在配送人员在场的情况下验货，则视为您所订购商品的包装无任何问题；4.为了方便日后可能出现的退换货流程，请保留商品外包装箱15天 温馨提示： 家电类商品签收标准：电视、空调、冰箱、洗衣机、家庭影院、热水器、油烟机、灶具、洗碗机、消毒柜等商品签收完成后请联系厂家专业售后上门安装，在售后上门之前请不要私自拆开包装，如自行开箱，商品发生问题，1号店有权不接受以此为由的退换货。</mutableString>
+                    <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                    <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
+                </textView>
+            </subviews>
+            <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="calibratedWhite"/>
+        </view>
+        <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" id="46">
+            <rect key="frame" x="0.0" y="0.0" width="300" height="367"/>
+            <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+            <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="calibratedWhite"/>
+            <mutableString key="text">   A : 我们所售商品均为正品，并可提供发票，同时严格遵循国家三包法规，针对相关商品履行更换和退货的责任与义务。
+    为保障您的权益，请您付款后即与配送人员当面核对商品的种类、数量、规格、赠品、金额等是否与订单一致，确认无误后再进行签收。 
+    请您保管好发票，送货单和商品的完整包装，对于误购，多购，或对商品不满意等原因，在商品包装整洁、完整未拆封、相关配件齐全、不影响二次销售的前提下可以选择退货，需扣除手续费，手续费为商品售价的百分之一，客户自行承担运费。
+
+    3C类商品自购买起七日内（以发票日期为准），出现国家三包规定的功能性故障时，必须出示生产厂家或特约售后服务中心的检测单，方可在我司进行换货或退货。八至十五日，可选择换货或者维修。超过十五日并且在商品质保期间，可在生产厂家或者相关售后免费维修。为了不耽误您的使用，缩短商品的处理时间，建议您直接联系生产厂家，以便及时处理！ 
+
+   1、1号店不对因人为疏忽或使用不当而导致的商品问题作出退换或赔偿；
+   2、所有食品、床上用品、护肤品、成人用品、彩妆、日化用品，若无质量问题不可退换，若确有质量问题，我司将按相关法规进行处理；
+   3、为保护您及其他客户的健康，玩具、服饰、贴身用品不可退换；
+   4、为维护知识产权，书籍和音像制品不可退换；
+   5、所有样品、派送品、促销品、赠品不可退换；
+   6、所有特价商品请当面验收，若无质量问题，事后不可退换；
+   7、商品的外包装、附件、说明书不完整或者发票、检测单有涂改、缺少的情况不可退换；
+   8、手机数码类产品，如出现软件升级不属于国家三包法规之内的故障，只需送至相关厂家进行升级，不在我司退货范围内。</mutableString>
+            <fontDescription key="fontDescription" name="Helvetica" family="Helvetica" pointSize="17"/>
+            <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
+        </textView>
+    </objects>
+    <resources>
+        <image name="title_bg.png" width="640" height="88"/>
+        <image name="title_left_btn.png" width="122" height="88"/>
+        <image name="title_left_btn_sel.png" width="122" height="88"/>
+        <image name="title_right_btn.png" width="122" height="88"/>
+    </resources>
+</document>

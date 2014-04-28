@@ -1,0 +1,2386 @@
+//
+//  PhoneCartViewController.m
+//  TheStoreApp
+//
+//  Created by yuan jun on 12-11-21.
+//
+//
+
+#import "PhoneCartViewController.h"
+#import "GlobalValue.h"
+#import "LocalCartService.h"
+#import "ProductVO.h"
+#import "LocalCartItemVO.h"
+#import "CartService.h"
+#import "CartItemVO.h"
+#import "CartVO.h"
+#import "AddressService.h"
+#import "ProductService.h"
+#import "DataController.h"
+#import <QuartzCore/QuartzCore.h>
+#import "MobilePromotionVO.h"
+#import "CheckOrder.h"
+#import "UserManage.h"
+#import "Gift.h"
+#import "AlertView.h"
+#import "OTSLoadingView.h"
+#import "OTSAlertView.h"
+#import "OTSActionSheet.h"
+#import "ErrorStrings.h"
+#import "TheStoreAppAppDelegate.h"
+#import "UIScrollView+OTS.h"
+#import "CartCell.h"
+#import "OTSProductDetail.h"
+#import "PromotionViewController.h"
+#import "PhoneCartPromotionCell.h"
+#import "CartCashPromotionCell.h"
+#import "GTMBase64.h"
+#import "OptionalPromotionInCartVO.h"
+#import "OTSNNPiecesVC.h"
+#import "CategoryProductsViewController.h"
+#import "EditGoodsReceiver.h"
+#import "CartCache.h"
+#import "UnionProductItemVO.h"
+#import "OTSWeRockService.h"
+#define ACTION_SHEET_CHOOSE_COUNT   1
+#define ACTION_SHEET_SETTLEMENT 2
+
+#define ALERTVIEW_TAG_DELETE_CONFIRM    1
+#define ALERTVIEW_TAG_ORDER_CONFIRM 2
+#define ALERTVIEW_TAG_ORDER_DISTRIBUTION 3
+
+#define URL_BASE_MALL_NO_ONE                        @"http://m.1mall.com/mw/cart?"
+
+#define CAN_EDIT_CELL 2013
+#define CANNOT_EDIT_CELL 2014
+
+@interface PhoneCartViewController ()
+@property(nonatomic, retain)UIView* mallCatrView;
+@property (nonatomic, retain)PromotionViewController   *promotionVC;
+@property(nonatomic, retain)NSMutableArray* optionalRootList;
+@property(nonatomic)NSInteger totalOptionCount;
+@property(nonatomic, retain)NSMutableArray* optionalTotalList;
+-(void)enter1mallCart;
+@end
+
+@implementation PhoneCartViewController
+@synthesize cartTableView,mallCatrView;
+@synthesize promotionVC = _promotionVC;
+@synthesize optionalRootList;
+@synthesize totalOptionCount;
+@synthesize optionalTotalList;
+@synthesize distributionArray;
+@synthesize distributionError;
+static int deleteQuantity=1;
+- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
+{
+    self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
+    if (self) {
+        // Custom initialization
+    }
+    return self;
+}
+-(void)dealloc{
+    [currentSelCashArray release];
+    [merchantIdArray release];
+    [productIdArray release];
+    [selectedRedemptionArray release];
+    [selectedCashPromotionArray release];
+    [m_SelectedGift release];
+    [m_ProductArray release];
+    [m_AllGiftArray release];
+    [cartTableView release];
+    [m_PickerView release];
+    [CashPromotionArray release];
+    [RedemptionPromotionArray release];
+    [_promotionVC release];
+    
+    OTS_SAFE_RELEASE(mallCatrView);
+    OTS_SAFE_RELEASE(hasJoinCash);
+    OTS_SAFE_RELEASE(optionalRootList);
+    OTS_SAFE_RELEASE(optionalTotalList);
+    OTS_SAFE_RELEASE(distributionArray);
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [super dealloc];
+}
+//导航bar
+-(void)initTitltBar{
+    UIImageView* tittleImg=[[UIImageView alloc] initWithImage:[UIImage imageNamed:@"title_bg.png"]];
+    tittleImg.frame=CGRectMake(0, 0, 320, 44);
+    tittleImg.userInteractionEnabled=YES;
+    [self.view addSubview:tittleImg];
+    [tittleImg release];
+    
+    editBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    [editBtn setBackgroundImage:[UIImage imageNamed:@"title_left_normal_btn_sel.png"] forState:UIControlStateHighlighted];
+    
+    [editBtn setTitle:@"修改" forState:UIControlStateNormal];
+    editBtn.titleLabel.font=[UIFont boldSystemFontOfSize:13];
+    editBtn.titleLabel.shadowColor=[UIColor darkGrayColor];
+    editBtn.titleLabel.shadowOffset=CGSizeMake(1, -1);
+    
+    [editBtn setBackgroundImage:[UIImage imageNamed:@"title_left_normal_btn.png"] forState:UIControlStateNormal];
+    [editBtn addTarget:self action:@selector(editBtn:) forControlEvents:UIControlEventTouchUpInside];
+    editBtn.tag=1;
+    editBtn.frame=CGRectMake(0, 0, 61, 44);
+    [tittleImg addSubview:editBtn];
+    
+    UILabel* titLab=[[UILabel alloc] initWithFrame:CGRectMake(61, 0, 320-122, 44)];
+    titLab.text=@"购物车";
+    titLab.textAlignment=UITextAlignmentCenter;
+    titLab.shadowColor=[UIColor darkGrayColor];
+    titLab.shadowOffset=CGSizeMake(1, -1);
+    titLab.font=[UIFont boldSystemFontOfSize:20];
+    titLab.textColor=[UIColor whiteColor];
+    titLab.backgroundColor=[UIColor clearColor];
+    [tittleImg addSubview:titLab];
+    [titLab release];
+    
+    accountBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    [accountBtn setBackgroundImage:[UIImage imageNamed:@"title_account.png"] forState:UIControlStateNormal];
+    [accountBtn addTarget:self action:@selector(buyBtnClick) forControlEvents:UIControlEventTouchUpInside];
+    [accountBtn setBackgroundImage:[UIImage imageNamed:@"title_account_sel.png"] forState:UIControlStateHighlighted];
+    accountBtn.frame=CGRectMake(320-61, 0, 61, 44);
+    [tittleImg addSubview:accountBtn];
+    accountBtn.hidden=YES;
+    editBtn.hidden=YES;
+}
+
+-(void)initCartInfoView{
+    UIFont*font13=[UIFont systemFontOfSize:13];
+    UIColor*clearCol=[UIColor clearColor];
+    UIView*cartInfo=[[UIView alloc] initWithFrame:CGRectMake(0, 44, 320, 58)];
+    cartInfo.backgroundColor=[UIColor colorWithRed:(249.0/255.0) green:(249.0/255.0) blue:(249.0/255.0) alpha:1] ;
+    [self.view addSubview:cartInfo];
+    [cartInfo release];
+    
+    productsNum=[[UILabel alloc] initWithFrame:CGRectMake(10, 0, 150, 28)];
+    productsNum.font=font13;
+    productsNum.text=@"共0件,0kg";
+    productsNum.backgroundColor=[UIColor clearColor];
+    [cartInfo addSubview:productsNum];
+    [productsNum release];
+    
+    totalWeight=[[UILabel alloc] initWithFrame:CGRectMake(160, 0, 145, 28)];
+    totalWeight.font=font13;
+    totalWeight.textAlignment=UITextAlignmentRight;
+    totalWeight.backgroundColor=clearCol;
+    totalWeight.text=@"立减: ¥ 0";
+    [cartInfo addSubview:totalWeight];
+    [totalWeight release];
+    
+    //    giftNum=[[UILabel alloc] initWithFrame:CGRectMake(10, 28, 80, 28)];
+    //    giftNum.font=font13;
+    //    giftNum.backgroundColor=clearCol;
+    //    giftNum.text=@"共0件赠品";
+    //    [cartInfo addSubview:giftNum];
+    //    [giftNum release];
+    
+    UILabel*billLab=[[UILabel alloc] initWithFrame:CGRectMake(10, 28, 90, 28)];
+    billLab.font=font13;
+    billLab.backgroundColor=clearCol;
+    billLab.textAlignment=UITextAlignmentLeft;
+    billLab.text=@"总计(未含运费):";
+    [cartInfo addSubview:billLab];
+    [billLab release];
+    
+    bill=[[UILabel alloc] initWithFrame:CGRectMake(100, 28, 100, 28)];
+    bill.font=[UIFont systemFontOfSize:18];
+    bill.backgroundColor=clearCol;
+    bill.textColor=[UIColor colorWithRed:0.686 green:0.078 blue:0.01 alpha:1];
+    bill.textAlignment=UITextAlignmentRight;
+    [cartInfo addSubview:bill];
+    bill.adjustsFontSizeToFitWidth=YES;
+    [bill release];
+    
+    pointNum=[[UILabel alloc] initWithFrame:CGRectMake(200, 28, 105, 28)];
+    pointNum.font=[UIFont systemFontOfSize:15];
+    pointNum.backgroundColor=clearCol;
+    //    pointNum.textColor=[UIColor colorWithRed:0.686 green:0.078 blue:0.01 alpha:1];
+    pointNum.textAlignment=UITextAlignmentLeft;
+    [cartInfo addSubview:pointNum];
+    [pointNum release];
+    
+    UIView* redline=[[UIView alloc] initWithFrame:CGRectMake(0, 57, 320, 1)];
+    redline.backgroundColor=[UIColor colorWithRed:0.686 green:0.078 blue:0.01 alpha:1];
+    [cartInfo addSubview:redline];
+    [redline release];
+}
+
+
+-(void)initCartTableView{
+    cartTableView=[[UITableView alloc] initWithFrame:CGRectMake(0, 44+58, 320, self.view.frame.size.height-44-58) style:UITableViewStylePlain];
+    cartTableView.delegate=self;
+    cartTableView.dataSource=self;
+    cartTableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+    [self.view addSubview:cartTableView];
+    [cartTableView ScrollMeToTopOnly];
+    tableFooter=[[UIView alloc] initWithFrame:CGRectMake(0, 0, 320, 170)];
+    tableFooter.backgroundColor=[UIColor colorWithRed:(248.0/255.0) green:(248.0/255.0) blue:(248.0/255.0) alpha:1];
+    m_CleanBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    m_CleanBtn.frame=CGRectMake(211, 15, 95, 32);
+    [m_CleanBtn setBackgroundImage:[UIImage imageNamed:@"gray_btn.png"] forState:UIControlStateNormal];
+    [m_CleanBtn setTitle:@"清空购物车" forState:UIControlStateNormal];
+    [m_CleanBtn addTarget:self action:@selector(cleanCart) forControlEvents:UIControlEventTouchUpInside];
+    m_CleanBtn.titleLabel.font=[UIFont systemFontOfSize:14];
+    [m_CleanBtn setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+    m_CleanBtn.hidden=YES;
+    [tableFooter addSubview:m_CleanBtn];
+    
+    
+    promotionTable=[[UITableView alloc] initWithFrame:CGRectMake(0, 0, 320, 20) style:UITableViewStyleGrouped];
+    promotionTable.delegate=self;
+    promotionTable.dataSource=self;
+    promotionTable.backgroundView=nil;
+    promotionTable.scrollEnabled=NO;
+    promotionTable.backgroundColor=[UIColor clearColor];
+    [tableFooter addSubview:promotionTable];
+    [promotionTable release];
+    
+    submitBtn=[UIButton buttonWithType:UIButtonTypeRoundedRect];
+    submitBtn.frame=CGRectMake(20, 5, 280, 40);
+    [submitBtn setBackgroundImage:[UIImage imageNamed:@"orange_long_btn.png"] forState:UIControlStateNormal];
+    [submitBtn addTarget:self action:@selector(buyBtnClick) forControlEvents:UIControlEventTouchUpInside];
+    [submitBtn setTitle:@"结算" forState:UIControlStateNormal];
+    submitBtn.titleLabel.font=[UIFont boldSystemFontOfSize:20];
+    [submitBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    [tableFooter addSubview:submitBtn];
+    
+    
+    feeImageView=[[UIImageView alloc] initWithFrame:CGRectMake(52, 60, 216, 47)];
+    feeImageView.image=[UIImage imageNamed:@"cart_fee.png"];
+    [tableFooter addSubview:feeImageView];
+    feeImageView.userInteractionEnabled=YES;
+    
+    showFeeBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    showFeeBtn.frame=CGRectMake(216-15-8-13, 8, 30, 30);
+    //    [showFeeBtn addTarget:self action:@selector(showFeeText:) forControlEvents:UIControlEventTouchUpInside];
+    [showFeeBtn setImage:[UIImage imageNamed:@"cart_fee_show.png"] forState:UIControlStateNormal];
+    [showFeeBtn setImage:[UIImage imageNamed:@"cart_fee_close.png"] forState:UIControlStateSelected];
+    [feeImageView addSubview:showFeeBtn];
+    
+    UIButton* bu=[UIButton buttonWithType:UIButtonTypeCustom];
+    bu.frame=CGRectMake(0, 0, 216, 47);
+    [bu addTarget:self action:@selector(showFeeText:) forControlEvents:UIControlEventTouchUpInside];
+    [feeImageView addSubview:bu];
+    
+    showFeeBtn.showsTouchWhenHighlighted=YES;
+    cartTableView.tableFooterView=tableFooter;
+    [feeImageView release];
+    [tableFooter release];
+}
+
+- (void)initCartEmptyView{
+    emptyView=[[UIImageView alloc] initWithFrame:CGRectMake(0, 44, 320, 367)];
+    emptyView.userInteractionEnabled=YES;
+    emptyView.image=[UIImage imageNamed:@"cart_null.png"];
+    [self.view addSubview:emptyView];
+    [emptyView release];
+    
+    UIButton* historyBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    [historyBtn addTarget:self action:@selector(goBrowseing:) forControlEvents:UIControlEventTouchUpInside];
+    [historyBtn setBackgroundImage:[UIImage imageNamed:@"browsebtn.png"] forState:UIControlStateNormal];
+    historyBtn.frame=CGRectMake(61, 243, 90, 30);
+    [emptyView addSubview:historyBtn];
+    
+    UIButton*favoriteBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    [favoriteBtn addTarget:self action:@selector(goFavoriteing:) forControlEvents:UIControlEventTouchUpInside];
+    
+    [favoriteBtn setBackgroundImage:[UIImage imageNamed:@"favoritebtn.png"] forState:UIControlStateNormal];
+    favoriteBtn.frame=CGRectMake(172, 243, 90, 30);
+    [emptyView addSubview:favoriteBtn];
+}
+-(void)initMallEntrance{
+    if (mallCatrView.superview) {
+        [self.mallCatrView removeFromSuperview];
+    }
+    
+    if (m_totalPriceMall > 0 || m_totalQuantityMall > 0) {  // 若存在1mall的商品，添加入口
+        cartTableView.frame = CGRectMake(0, 44+58, ApplicationWidth,ApplicationHeight-44-58-60-49);
+        
+        // 背景
+        self.mallCatrView = [[[UIView alloc]initWithFrame:CGRectMake(0, ApplicationHeight-49-60, ApplicationWidth, 60)]autorelease];
+        [mallCatrView setTag:1001];
+        
+        UIImageView* mallCartView = [[UIImageView alloc]initWithFrame:CGRectMake(0, 0, 320, 60)];
+        [mallCartView setImage:[[UIImage imageNamed:@"cart_1mall_viewBG.png"] stretchableImageWithLeftCapWidth:5 topCapHeight:120]];
+        [mallCatrView addSubview:mallCartView];
+        [mallCartView release];
+        // 按钮
+        UIButton* to1mallBtn = [[UIButton alloc]initWithFrame:CGRectMake(24, 11, 272, 39)];
+        [to1mallBtn setBackgroundImage:[UIImage imageNamed:@"cart_to1mall.png"] forState:UIControlStateNormal];
+        [to1mallBtn addTarget:self action:@selector(enter1mallCart) forControlEvents:UIControlEventTouchUpInside];
+        [mallCatrView addSubview:to1mallBtn];
+        [to1mallBtn release];
+        
+        //1MALL购物车信息
+        UILabel* infoLabel = [[UILabel alloc]initWithFrame:CGRectMake(60, 10, 200, 20)];
+        [infoLabel setFont:[UIFont systemFontOfSize:14.0]];
+        [infoLabel setTextColor:[UIColor colorWithRed:76.0/255 green:76.0/255 blue:76.0/255 alpha:1.0]];
+        [infoLabel setText:[NSString stringWithFormat:@"%d件，￥%.2f",m_totalQuantityMall,m_totalPriceMall]];
+        [infoLabel setBackgroundColor:[UIColor clearColor]];
+        [to1mallBtn addSubview:infoLabel];
+        [infoLabel release];
+        
+        //[self.view insertSubview:mallCatrView aboveSubview:emptyView];
+        [self.view addSubview:mallCatrView];
+        [self.view bringSubviewToFront:mallCatrView];
+    }else{  // 不存在MALL的商品，恢复frame大小
+        cartTableView.frame = CGRectMake(0, 44+58, 320,self.view.frame.size.height-44-58);
+    }
+}
+
+-(void)viewWillAppear:(BOOL)animated{
+    if (SharedDelegate.m_UpdateCart) {
+        SharedDelegate.needCachedPromotion=YES;
+        [self reloadCart];
+    }
+}
+-(void)logOutHandle{
+//    [self refreshCart];
+    totalNeedPoint=0;
+    emptyView.hidden=NO;
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    [self initTitltBar];
+    [self initCartInfoView];
+    [self initCartTableView];
+    [self initCartEmptyView];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(reloadCart) name:@"cartload" object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(logOutHandle) name:OTS_USER_LOG_OUT object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(promotionreloadCart) name:@"promotioncartload" object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(cartDirectToOrder) name:@"CartDirectToOrder" object:nil];
+    
+    m_ProductArray=[[NSMutableArray alloc] init];//商品数组
+    m_SelectedGift=[[NSMutableArray alloc] init];//已选赠品数组
+    selectedRedemptionArray=[[NSMutableArray alloc] init];//已选换购数组
+    selectedCashPromotionArray=[[NSMutableArray alloc] init];//已选满减数组
+    m_AllGiftArray=[[NSMutableArray alloc] init];//可以获取的所有赠品列表
+    CashPromotionArray=[[NSMutableArray alloc] init];//可以获取的所有满减列表
+    RedemptionPromotionArray=[[NSMutableArray alloc] init];//可以获取的所有换购列表
+    merchantIdArray=[[NSMutableArray alloc] init];//当前商品的merchantId
+    productIdArray=[[NSMutableArray alloc] init];//当前商品的productId
+    currentSelCashArray=[[NSMutableArray alloc] init];//当前选中的满减
+    hasJoinCash = [[NSMutableDictionary alloc] init];//记录立减信息
+}
+
+//直接进入检查订单
+-(void)cartDirectToOrder
+{
+    m_DirectToOrder=YES;
+}
+
+- (void)doReloadCart
+{
+    [self showMainView];
+    [self refreshCart];
+}
+
+-(void)reloadCart
+{
+    [self performSelectorOnMainThread:@selector(doReloadCart) withObject:nil waitUntilDone:NO];
+}
+-(void)detailToCart{
+    if (SharedDelegate.m_UpdateCart) {
+        [self reloadCart];
+    }
+    
+}
+//**推广条刷新购物车
+-(void)promotiondoReloadCart
+{
+    [self refreshCart];
+}
+
+-(void)promotionreloadCart
+{
+    [self performSelectorOnMainThread:@selector(promotiondoReloadCart) withObject:nil waitUntilDone:NO];
+}
+
+-(void)refreshCart{
+    NSString *token=[[GlobalValue getGlobalValueInstance] token];
+    if (!cartOnLoading) {
+        m_TotalCash=0;
+        m_TotalWeight=0;
+    }
+    accountBtn.enabled=NO;
+    
+    if (token) {
+        [self.loadingView showInView:self.view];
+        [self otsDetatchMemorySafeNewThreadSelector:@selector(RequsetCartData) toTarget:self withObject:nil];
+    }else{
+        // N元N件相关数据
+        [optionalRootList removeAllObjects];
+        [optionalTotalList removeAllObjects];
+        totalOptionCount = 0;
+        
+        m_totalPriceMall = 0;
+        m_totalQuantityMall = 0;
+        [self initMallEntrance];
+        [self getLocalCartData];
+        [self refreshTableFooter];
+        [self refreshCartNum];
+        [self requsetSuccess];
+    }
+}
+
+-(void)refreshCartInfo{
+    totalWeight.text=[NSString stringWithFormat:@"立减: ¥ %.2f",m_TotalCash];;
+    int giftTotalCount=0;
+    for (NSMutableDictionary *mDictionary in m_SelectedGift) {
+        NSNumber *productCount=[mDictionary objectForKey:@"productCount"];
+        giftTotalCount+=[productCount intValue];
+    }
+    if (giftTotalCount>0) {
+        productsNum.text=[NSString stringWithFormat:@"共%d件(%d件赠品) %.2f kg",m_TotalCount,giftTotalCount,m_TotalWeight];
+    }else{
+        productsNum.text=[NSString stringWithFormat:@"共%d件 %.2f kg",m_TotalCount,m_TotalWeight];
+    }
+    if (totalNeedPoint>0) {
+        pointNum.text=[NSString stringWithFormat:@" + %d积分",totalNeedPoint];
+        CGSize size=[pointNum.text sizeWithFont:[UIFont systemFontOfSize:15] forWidth:100 lineBreakMode: UILineBreakModeWordWrap];
+        pointNum.frame=CGRectMake(305-size.width, 28, size.width, 28);
+        bill.frame=CGRectMake(203-size.width, 28, 100, 28);
+    }else{
+        pointNum.text=@"";
+        bill.frame=CGRectMake(200, 28, 105, 28);
+    }
+    bill.text=[NSString stringWithFormat:@"¥ %.2f",m_TotalPrice-m_TotalCash];
+}
+
+-(void)reSizeTableFooter:(CGRect)promotionTableFrame{
+    promotionTable.frame=promotionTableFrame;
+    promotionTable.hidden=NO;
+    m_CleanBtn.frame=CGRectMake(211, promotionTableFrame.size.height+5, 95, 32);
+    submitBtn.frame=CGRectMake(20, promotionTableFrame.size.height+5, 280, 40);
+    feeImageView.frame=CGRectMake(52, promotionTableFrame.size.height+60, 216, feeImageView.frame.size.height);
+    //    showFeeBtn.selected=NO;
+    //    feeImageView.image=[UIImage imageNamed:@"cart_fee.png"];
+    tableFooter.frame=CGRectMake(0, 0, 320, promotionTableFrame.size.height+73+feeImageView.frame.size.height);
+}
+
+-(void)showFeeText:(UIButton*)button{
+    
+    CGRect rect=tableFooter.frame;
+    float h=rect.size.height;
+    float promotiontableHeight;
+    if (!m_HasGift&&!m_hasRePromtion&&!m_hasCash) {
+        promotiontableHeight=0;
+    }else{
+        promotiontableHeight=promotionTable.frame.size.height;
+    }    if (!button.selected) {
+        button.selected=YES;
+        feeImageView.frame=CGRectMake(52, promotiontableHeight+60, 216, 303);
+        feeImageView.image=[UIImage imageNamed:@"cart_fee_detail.png"];
+        tableFooter.frame=CGRectMake(0, 0, 320, h+303-47);
+    }else{
+        feeImageView.frame=CGRectMake(52, promotiontableHeight+60, 216, 47);
+        feeImageView.image=[UIImage imageNamed:@"cart_fee.png"];
+        tableFooter.frame=CGRectMake(0, 0, 320, h-303+47);
+        button.selected=NO;
+    }
+    submitBtn.frame=CGRectMake(20, promotiontableHeight+5, 280, 40);
+    m_CleanBtn.frame=CGRectMake(211, promotiontableHeight+5, 95, 32);
+    
+    cartTableView.tableFooterView=tableFooter;
+    CGFloat height = cartTableView.contentSize.height - cartTableView.bounds.size.height;
+    if (height<0) {
+        height=0;
+    }
+    [cartTableView setContentOffset:CGPointMake(0, height) animated:YES];
+}
+
+-(void)refreshTableFooter{
+    [self.loadingView hide];
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"RefreshPromotionBar" object:CashPromotionArray];
+    int rowNum=0;
+    if ([[CartCache sharedCartCache].cartCache.hasFreePromotion isEqualToString:@"true"]||m_hasRePromtion) {
+        rowNum++;
+    }
+    if ([GlobalValue getGlobalValueInstance].token!=nil) {
+        if (CashPromotionArray.count) {
+            rowNum+=CashPromotionArray.count;
+        }
+    }else{
+        if (m_hasCash) {
+            rowNum++;
+        }
+    }
+    
+    [self reSizeTableFooter:CGRectMake(0, 0, 320, 44*rowNum+40)];
+    
+    cartTableView.tableFooterView=tableFooter;
+    [promotionTable reloadData];
+    
+}
+
+-(void)enableCart
+{
+    [self.view setUserInteractionEnabled:YES];
+}
+
+#pragma mark data Request
+
+
+-(void)refreshCartNum{
+    [SharedDelegate clearCartNum];
+    if (m_TotalCount) {
+        [SharedDelegate setCartNum:m_TotalCount];
+    }
+    //刷新n元n件
+    [self performInMainBlock:^{
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"NNPiecesLoad" object:nil];
+    }];
+}
+
+
+-(void)requsetSuccess{
+    cartOnLoading=NO;
+    if (m_TotalCount) {
+        emptyView.hidden=YES;
+        if (!cartTableView.editing) {
+            accountBtn.hidden=NO;
+        }
+        editBtn.hidden=NO;
+        cartTableView.hidden=NO;
+    }else{
+        [self.loadingView hide];
+        emptyView.hidden=NO;
+        if (cartTableView.editing) {
+            if (editBtn.tag==0) {
+                [self editBtn:editBtn];
+            }
+        }
+        cartTableView.hidden=YES;
+        accountBtn.hidden=YES;
+        editBtn.hidden=YES;
+    }
+    accountBtn.enabled=YES;
+    //    判断，有赠品没有，如果未登录，满减只显示一行，登录后，所有满减都显示
+    [cartTableView reloadData];
+    [self refreshTableFooter];
+    [self refreshCartInfo];
+    
+    [self initMallEntrance];
+    
+    if (m_DirectToOrder) {
+        m_DirectToOrder=NO;
+		[self performSelector:@selector(buyBtnClick) withObject:nil afterDelay:0];
+	}
+}
+-(void)getLocalCartData{
+    LocalCartService *service=[[LocalCartService alloc] init];
+    //所有本地购物车商品
+    [selectedCashPromotionArray removeAllObjects];
+    [selectedRedemptionArray removeAllObjects];
+    [m_SelectedGift removeAllObjects];
+    
+    /* 旧的本地购物车
+     NSMutableArray *tempArray=[service getLocalCartArrayWithFilePath:[GlobalValue getGlobalValueInstance].localCartFileName];
+     */
+    NSMutableArray *tempArray = [service queryLocalCartFromSqlite3];
+    [m_ProductArray removeAllObjects];
+    m_HasGift=NO;
+    m_hasRePromtion=NO;
+    m_hasCash=NO;
+    
+    
+    for (LocalCartItemVO *localCartItemVO in tempArray) {
+        NSMutableDictionary *mDictionary=[[NSMutableDictionary alloc] init];
+        ProductVO *productVO=[localCartItemVO changeToProductVO];
+        
+        //        查商品详情
+        //
+        //            ProductService* helper= [[ProductService alloc] init];
+        //            ProductVO*product =[helper getProductDetail:[GlobalValue getGlobalValueInstance].trader productId:productVO.productId provinceId:[GlobalValue getGlobalValueInstance].provinceId];
+        //            [helper release];
+        if ([[productVO hasGift] intValue]==1) {//未登录情况下判断是否有赠品
+            m_HasGift=YES;
+        }
+        
+        //            if ([productVO hasCash]!=nil ) {//登录情况判断商品是否参与满减
+        //                m_hasCash=YES;
+        //            }
+        m_hasCash = productVO.isJoinCash;
+        
+        if ([[productVO hasRedemption] intValue]==1) {
+            m_hasRePromtion=YES;
+        }
+        //
+        NSNumber *productCount=[NSNumber numberWithInt:[localCartItemVO productCount]];
+        [mDictionary setObject:productVO forKey:@"productVO"];
+        [mDictionary setObject:productCount forKey:@"productCount"];
+        [m_ProductArray addObject:mDictionary];
+        [mDictionary release];
+    }
+    /* 旧的本地购物车
+     //总价
+     m_TotalPrice=[service getLocalCartTotalPriceWithFilePath:[GlobalValue getGlobalValueInstance].localCartFileName];
+     //总数量
+     m_TotalCount=[service getLocalCartNumberWithFilePath:[GlobalValue getGlobalValueInstance].localCartFileName];
+     */
+    //总价
+    m_TotalPrice = [service getLocalCartTotalPriceFromSqlite3];
+    //总数量
+    m_TotalCount = [service getLocalCartNumberFromSqlite3];
+    //已领赠品为空
+    [m_SelectedGift removeAllObjects];
+    [service release];
+}
+#pragma mark 新增的缓存
+//缓存读购物车
+-(void)cacheCartData{
+    CartVO* tempCartVO=[CartCache sharedCartCache].cartCache;
+    [m_ProductArray removeAllObjects];
+    [merchantIdArray removeAllObjects];
+    [productIdArray removeAllObjects];
+    for (CartItemVO *cartItemVO in [tempCartVO buyItemList]) {
+        NSMutableDictionary *mDictionary=[[NSMutableDictionary alloc] init];
+        ProductVO *productVO=[cartItemVO product];
+        if ([[productVO hasGift] intValue]==1) {//登录情况判断是否有赠品
+            m_HasGift=YES;
+        }
+        
+        if (productVO.isJoinCash) {//登录情况判断商品是否参与满减
+            m_hasCash=YES;
+        }
+        //                此处不能使用下列方法，下列方法可能返回NO，导致忽略了其他有满减的商品
+        //                m_hasCash = productVO.isJoinCash;
+        
+        if ([[productVO hasRedemption] intValue]==1) {
+            m_hasRePromtion=YES;
+        }
+        NSNumber *productCount=[cartItemVO buyQuantity];
+        NSNumber *updateType=[cartItemVO updateType];
+        [mDictionary setObject:productVO forKey:@"productVO"];
+        [mDictionary setObject:productCount forKey:@"productCount"];
+        [mDictionary setObject:updateType forKey:@"updateType"];
+        [m_ProductArray addObject:mDictionary];
+        [mDictionary release];
+        
+        [merchantIdArray addObject:[productVO merchantId]];
+        [productIdArray addObject:[productVO productId]];
+        
+    }
+    self.optionalRootList = tempCartVO.optionalPromotionList;
+    self.optionalTotalList = [[[NSMutableArray alloc]init]autorelease];
+    int i = 0;
+    for (OptionalPromotionInCartVO* opVo in self.optionalRootList) {
+        [optionalTotalList addObject:opVo];
+        i++;
+        for (CartItemVO* cartItemVo in opVo.productItems) {
+            //                    for (id tempVO in optionalTotalList) { // 合并相同的商品。=。=！三层for循环有木有，木有人性啊，居然要客户端来做
+            //                        if ([tempVO isKindOfClass:[CartItemVO class]]) {
+            //                            CartItemVO* tempItemVO = (CartItemVO*)tempVO;
+            //                            if (tempItemVO.product.productId.doubleValue == cartItemVo.product.productId.doubleValue) {
+            //                                cartItemVo.buyQuantity = [NSNumber numberWithInt:(tempItemVO.buyQuantity.intValue+1)];
+            //                                [optionalTotalList removeObject:tempVO];
+            //                                i--;
+            //                            }
+            //                        }
+            //
+            //                    }                                       然后又不要客户端来做了，然后~ 就没有然后了。= =！
+            [optionalTotalList addObject:cartItemVo];
+            i++;
+        }
+    }
+    self.totalOptionCount = i;
+    //总价
+    m_TotalPrice=[[tempCartVO totalprice] floatValue];
+    //总数量
+    m_TotalCount=[[tempCartVO totalquantity] intValue];
+    //总重量
+    m_TotalWeight=[[tempCartVO totalWeight] floatValue];
+    //立减
+    m_TotalCash = [[tempCartVO cashAmount] floatValue];
+    //总消耗积分
+    totalNeedPoint=[[tempCartVO totalNeedPoint] intValue];
+    //先刷新购物车数量
+    [self performSelectorOnMainThread:@selector(refreshCartNum) withObject:nil waitUntilDone:NO];
+    m_totalPriceMall = [[tempCartVO totalpriceMall] doubleValue];
+    m_totalQuantityMall = [[tempCartVO totalquantityMall]intValue];
+    //#warning 假数据
+    //            m_totalQuantityMall = 20;
+    //            m_totalPriceMall = 10101010.987;
+    [m_SelectedGift removeAllObjects];
+    for (CartItemVO *cartItemVO in [tempCartVO gifItemtList]) {
+        NSMutableDictionary *mDictionary=[[NSMutableDictionary alloc] init];
+        ProductVO *productVO=[cartItemVO product];
+        productVO.isGift = [NSNumber numberWithInt:1];
+        NSNumber *productCount=[cartItemVO buyQuantity];
+        [mDictionary setObject:productVO forKey:@"productVO"];
+        [mDictionary setObject:productCount forKey:@"productCount"];
+        [m_SelectedGift addObject:mDictionary];
+        [mDictionary release];
+    }
+    [currentSelCashArray removeAllObjects];
+    [selectedRedemptionArray removeAllObjects];
+    for (CartItemVO*cartItem in [tempCartVO redemptionItemList]) {
+        NSMutableDictionary *mDictionary=[[NSMutableDictionary alloc] init];
+        ProductVO *productVO=[cartItem product];
+        NSNumber *productCount=[cartItem buyQuantity];
+        [mDictionary setObject:productVO forKey:@"productVO"];
+        [mDictionary setObject:productCount forKey:@"productCount"];
+        [selectedRedemptionArray addObject:mDictionary];
+        [mDictionary release];
+    }
+    
+    [selectedCashPromotionArray removeAllObjects];
+    for (CartItemVO*cartItem in [tempCartVO cashPromotionList]) {
+        NSMutableDictionary *mDictionary=[[NSMutableDictionary alloc] init];
+        ProductVO *productVO=[cartItem product];
+        NSNumber *productCount=[cartItem buyQuantity];
+        NSString *cashPromotionName=[cartItem cashPromotionName];
+        NSString *cashPromotionAmount=[cartItem cashPromotionAmount];
+        [mDictionary setObject:productVO forKey:@"productVO"];
+        [mDictionary setObject:productCount forKey:@"productCount"];
+        [mDictionary setObject:cashPromotionName forKey:@"cashPromotionName"];
+        [mDictionary setObject:cashPromotionAmount forKey:@"cashPromotionAmount"];
+        [selectedCashPromotionArray addObject:mDictionary];
+        [mDictionary release];
+    }
+    [currentSelCashArray addObjectsFromArray:selectedCashPromotionArray];
+    
+    [RedemptionPromotionArray removeAllObjects];
+    [m_AllGiftArray removeAllObjects];
+    //            if (m_HasGift||m_hasRePromtion) {
+    //                [self performSelectorOnMainThread:@selector(promotionGiftAndRemption) withObject:nil waitUntilDone:NO];
+    //            }
+    //必须在外面清掉 CashPromotionArray 如果刷新购物车的前有满减，而刷新后木满减，不清掉数组，会显示错误 yj
+    [CashPromotionArray removeAllObjects];
+    if (m_hasCash) {
+        CartService*cartPSev=[[CartService alloc] init];
+        //        NSMutableArray*cashMerchantArray=[NSMutableArray array];
+        //        NSMutableArray* cashProductArray=[NSMutableArray array];
+        //        for (int i=0; i<m_ProductArray.count; i++) {
+        //            NSDictionary* temDic=[m_ProductArray objectAtIndex:i];
+        //            ProductVO* productvo=[temDic valueForKey:@"productVO"];
+        //            if (productvo.hasCash && productvo.hasCash.length>0 ) {
+        //                [cashMerchantArray addObject:productvo.merchantId];
+        //                [cashProductArray addObject:productvo.productId];
+        //            }
+        //        }
+        
+        NSArray*cashTempAr=[cartPSev getCashList:[GlobalValue getGlobalValueInstance].token];
+        //        NSArray* cashTempAr=[cartPSev getCashPromotionList:[GlobalValue getGlobalValueInstance].token merchantIds:cashMerchantArray productIds:cashProductArray];
+        if (cashTempAr!=nil&&[cashTempAr isKindOfClass:[NSArray class]])
+        {
+            DebugLog(@"%d====+++++++===%d",CashPromotionArray.count,cashTempAr.count);
+            [CashPromotionArray addObjectsFromArray:cashTempAr];
+            DebugLog(@"%d==++++++++++======%d",CashPromotionArray.count,cashTempAr.count);
+            
+            [self performSelectorOnMainThread:@selector(refreshTableFooter) withObject:nil waitUntilDone:NO];
+        }
+        else {
+            [self performSelectorOnMainThread:@selector(netError) withObject:nil waitUntilDone:NO];
+        }
+        [cartPSev release];
+        
+        //                [self otsDetatchMemorySafeNewThreadSelector:@selector(requsetCashPromotion) toTarget:self withObject:nil];
+    }
+    [self performSelectorOnMainThread:@selector(requsetSuccess) withObject:nil waitUntilDone:NO];
+}
+
+
+#pragma mark - 新线程
+//新线程获取购物车
+-(void)RequsetCartData{
+    @autoreleasepool {
+        if (cartOnLoading) {
+            return;
+        }
+        CartService *cService=[[[CartService alloc] init] autorelease];
+        CartVO *tempCartVO=nil;
+        cartOnLoading=YES;
+        tempCartVO=[cService getSessionCart:[GlobalValue getGlobalValueInstance].token];
+        if (tempCartVO==nil || [tempCartVO isKindOfClass:[NSNull class]]) {
+            [self performSelectorOnMainThread:@selector(netError) withObject:nil waitUntilDone:NO];
+        }
+        else {
+            m_HasGift=NO;
+            m_hasRePromtion=NO;
+            m_hasCash=NO;
+            SharedDelegate.m_UpdateCart=NO;
+            SharedDelegate.needCachedPromotion=YES;
+            //检测秒杀信息
+            
+            [self checkkillProduct:^(CartVO *backCartVo)
+             {
+                 [CartCache sharedCartCache].cartCache=backCartVo;
+                 
+                 [self cacheCartData];
+                 
+             } curCartVo:tempCartVO];
+            
+//            [CartCache sharedCartCache].cartCache=tempCartVO;
+//            [self cacheCartData];
+            
+        }
+    }
+}
+
+//由于CartItemVO里面没有秒杀信息，这里需要做适配
+-(void)checkkillProduct:(void(^)(CartVO *tempCartVO))aCompletion curCartVo:(CartVO *)curcart
+{
+    //    aCompletion(curcart);
+    NSMutableArray *productIds=[[NSMutableArray alloc] init];
+    NSMutableArray *promotionIds=[[NSMutableArray alloc] init];
+    NSMutableArray * buyItemList = curcart.buyItemList;
+    
+    __block NSArray * checkSeckillArray;
+    
+    Trader * trader = [GlobalValue getGlobalValueInstance].trader;
+    NSNumber * provinceId = [GlobalValue getGlobalValueInstance].provinceId;
+    
+    int i;
+    for (i=0; i<[buyItemList count]; i++) {
+        CartItemVO *cartItemVO=[buyItemList objectAtIndex:i];
+        ProductVO *productVO=cartItemVO.product;
+        [productIds addObject:[NSNumber numberWithInt:[productVO.productId intValue]]];
+        if (productVO.promotionId!=nil) {
+            [promotionIds addObject:[NSString stringWithString:productVO.promotionId]];
+        } else {
+            [promotionIds addObject:@"0_0_0"];
+        }
+    }
+    
+    [self performInThreadBlock:^(){
+        @autoreleasepool {
+            CartService *cService=[[[CartService alloc] init] autorelease];
+            checkSeckillArray = [[cService checkIfSecKillForList:trader promotionIdList:promotionIds productIdList:productIds provinceId:provinceId] retain];
+        }
+    } completionInMainBlock:^() {
+        
+        for (int j=0; j<[checkSeckillArray count]; j++) {
+            CheckSecKillResult * checkresult = [OTSUtility safeObjectAtIndex:j inArray:checkSeckillArray];
+            //判断当前序号是否为秒杀商品 和 curcart.buyItemList
+            CartItemVO *sec_CartItem=[buyItemList objectAtIndex:j];
+            ProductVO *sec_Product=sec_CartItem.product;
+            [sec_Product setStartTime:checkresult.startDate];
+            [sec_Product setEndTime:checkresult.endDate];
+            [sec_Product setCanSecKill:checkresult.canSecKill];
+            [sec_Product setIfSecKill:checkresult.ifSecKill];
+        }
+         aCompletion(curcart);
+         [checkSeckillArray release];
+     }];
+    
+}
+
+/*
+ //新线程获取赠品、换购
+ -(void)requestALLGiftAndRedemptionList{
+ @autoreleasepool {
+ 
+ BOOL errorOccur=NO;
+ ProductService *pServ=[[ProductService alloc] init];
+ NSMutableArray*giftMerchantArray=[NSMutableArray array];
+ NSMutableArray* giftProductArray=[NSMutableArray array];
+ NSMutableArray* redemptionMerchantAr=[NSMutableArray array];
+ NSMutableArray* redemptionProductAr=[NSMutableArray array];
+ for (int i=0; i<m_ProductArray.count; i++) {
+ NSDictionary* temDic=[m_ProductArray objectAtIndex:i];
+ ProductVO* productvo=[temDic valueForKey:@"productVO"];
+ if (productvo.hasGift.intValue) {
+ [giftMerchantArray addObject:productvo.merchantId];
+ [giftProductArray addObject:productvo.productId];
+ }
+ if (productvo.hasRedemption.intValue) {
+ [redemptionMerchantAr addObject:productvo.merchantId];
+ [redemptionProductAr addObject:productvo.productId];
+ }
+ }
+ NSArray *tempArray  = [pServ getPromotionGiftList:[GlobalValue getGlobalValueInstance].token
+ merchantIds:giftMerchantArray productIds:giftProductArray];
+ 
+ if (tempArray==nil || [tempArray isKindOfClass:[NSNull class]]) {
+ errorOccur=YES;
+ } else {
+ [m_AllGiftArray addObjectsFromArray:tempArray];
+ }
+ [pServ release];
+ ProductService*redempPSev=[[ProductService alloc] init];
+ NSArray* redempTemp=[redempPSev getRedemptionPromotionList:[GlobalValue getGlobalValueInstance].token merchantIds:redemptionMerchantAr productIds:redemptionProductAr];
+ if (redempTemp!=nil&&[redempTemp isKindOfClass:[NSArray class]]) {
+ [RedemptionPromotionArray addObjectsFromArray:redempTemp];
+ }else{
+ errorOccur=YES;
+ }
+ [redempPSev release];
+ if (errorOccur) {
+ [self performSelectorOnMainThread:@selector(netError) withObject:nil waitUntilDone:NO];
+ NSMutableDictionary* dic=[NSMutableDictionary dictionaryWithObject:@"error" forKey:@"error"];
+ [[NSNotificationCenter defaultCenter] postNotificationName:@"RECIVE_PROMOTION_DATA" object:dic];
+ 
+ }else {
+ [self performSelectorOnMainThread:@selector(postTofreshPromotion) withObject:nil waitUntilDone:NO];
+ [self performSelectorOnMainThread:@selector(refreshTableFooter) withObject:nil waitUntilDone:NO];
+ }
+ }
+ }
+ 
+ -(void)postTofreshPromotion{
+ NSMutableDictionary* dic=[NSMutableDictionary dictionary];
+ [dic setObject:RedemptionPromotionArray forKey:@"REDEMPTION"];
+ [dic setObject:m_AllGiftArray forKey:@"GIFT"];
+ [[NSNotificationCenter defaultCenter] postNotificationName:@"RECIVE_PROMOTION_DATA" object:dic];
+ 
+ }
+ */
+// 删除N元N件
+-(void)deleteNNWithItem:(OptionalPromotionInCartVO*)aVO{
+    @autoreleasepool {
+        //        AddOrDeletePromotionResult* delOptionResult;
+        CartService* sev = [[[CartService alloc]init]autorelease];
+        NSMutableArray* proIds=[NSMutableArray array];
+        NSMutableArray* merids=[NSMutableArray array];
+        NSMutableArray* quantitys=[NSMutableArray array];
+        NSMutableArray* promotionIds=[NSMutableArray array];
+        NSString* optionalPromotion=[NSString stringWithFormat:@"%@_%@_optional",aVO.promotionId,aVO.promotionLevelId];
+
+        for (UnionProductItemVO *unionVO in aVO.unionProductItemVOs) {
+            [proIds addObject:unionVO.productId];
+            [quantitys addObject:unionVO.num];
+            [merids addObject:aVO.merchantId];
+            [promotionIds addObject:optionalPromotion];
+        }
+//        for (CartItemVO* cartitemvo in aVO.productItems) {
+//            [proIds addObject:cartitemvo.product.productId];
+//            [merids addObject:cartitemvo.product.merchantId];
+//            [quantitys addObject:cartitemvo.buyQuantity];
+////            接口让自己拼接，我x
+//            [promotionIds addObject:optionalPromotion];
+//        }
+        int result=[sev deleteOptionalProduct:[GlobalValue getGlobalValueInstance].token productIds:proIds merchantIds:merids quantitys:quantitys promotionIds:promotionIds];
+        //        delOptionResult = [[sev deleteOptional:[GlobalValue getGlobalValueInstance].token optionalPromotionInCartVO:aVO]retain];
+        
+        //        if (delOptionResult != nil && delOptionResult.resultCode.intValue == 1) {
+        if(result==1){
+            [self performSelectorOnMainThread:@selector(refreshCart) withObject:nil waitUntilDone:NO];
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"resetNNPiecesTop" object:nil];
+        } else {
+            [self performSelectorOnMainThread:@selector(toastShowString:) withObject:@"删除失败" waitUntilDone:NO];
+        }
+        //        [delOptionResult release];
+    }
+}
+//新线程删除一条商品
+-(void)requestDeleteCartItem{
+    @autoreleasepool {
+        CartService *cService=[[CartService alloc] init];
+        NSMutableDictionary *mDictionary=
+        [OTSUtility safeObjectAtIndex:m_CurrentIndex inArray:m_ProductArray];
+        ProductVO *productVO=[mDictionary objectForKey:@"productVO"];
+        NSNumber *updateType=[mDictionary objectForKey:@"updateType"];
+        deleteQuantity=[[mDictionary valueForKey:@"productCount"] intValue];
+        int result=[cService deleteSingleProduct:[GlobalValue getGlobalValueInstance].token productId:productVO.productId merchantId:productVO.merchantId  promotionid:productVO.promotionId];
+        //        int result=[cService deleteSingleProduct:[GlobalValue getGlobalValueInstance].token productId:[productVO productId] merchantId:[productVO merchantId]  promotionid:[productVO promotionId]];
+        if (result==1) {
+            [self performSelectorOnMainThread:@selector(refreshCart) withObject:nil waitUntilDone:NO];
+            
+            // 更新摇一摇寄存箱状态，极度坑爹的一种方式啊有木有啊。。。
+            if (productVO.promotionId && [productVO.promotionId rangeOfString:@"landingpage"].location!=NSNotFound) {
+                [[OTSWeRockService myInstance]updateStroageBoxProductType:[GlobalValue getGlobalValueInstance].token promotionIdList:[NSMutableArray arrayWithObject:productVO.promotionId] productIdList:[NSMutableArray arrayWithObject:productVO.productId] productStatus:[NSNumber numberWithInt:0]];
+            }
+        } else {
+            [self performSelectorOnMainThread:@selector(toastShowString:) withObject:@"删除失败" waitUntilDone:NO];
+        }
+        [cService release];
+    }
+}
+
+//新线程删除所有商品
+-(void)requestDeleteAllCartItem{
+    @autoreleasepool {
+        CartService *cService=[[CartService alloc] init];
+        int result=[cService delAllProduct:[GlobalValue getGlobalValueInstance].token];
+        if (result==1) {
+            m_TotalCount=0;
+            [m_AllGiftArray removeAllObjects];
+            [productIdArray removeAllObjects];
+            [RedemptionPromotionArray removeAllObjects];
+            [CashPromotionArray removeAllObjects];
+            [self performSelectorOnMainThread:@selector(requsetSuccess) withObject:nil waitUntilDone:NO];
+            [self performSelectorOnMainThread:@selector(refreshCartNum) withObject:nil waitUntilDone:NO];
+        } else {
+            [self performSelectorOnMainThread:@selector(toastShowString:) withObject:@"清空购物车失败"waitUntilDone:NO];
+        }
+        [cService release];
+    }
+}
+
+//新线程获取收货地址列表
+-(void)requsetReceiverAddressList{
+    @autoreleasepool {
+        AddressService *aServ=[[AddressService alloc] init];
+        NSArray *tempArray=nil;
+        tempArray=[aServ getGoodReceiverListByToken:[GlobalValue getGlobalValueInstance].token];
+        if (tempArray==nil || [tempArray isKindOfClass:[NSNull class]]) {
+            [self performSelectorOnMainThread:@selector(netError) withObject:nil waitUntilDone:NO];
+        } else {
+            if ([tempArray count]==0) {
+                m_HasAddress=NO;
+            } else {
+                m_HasAddress=YES;
+            }
+            [self otsDetatchMemorySafeNewThreadSelector:@selector(creatSessionOrder) toTarget:self withObject:nil];
+        }
+        [aServ release];
+        
+    }
+}
+
+//新线程创建订单
+-(void)creatSessionOrder{
+    @autoreleasepool {
+        OrderService *service = [[[OrderService alloc] init] autorelease];
+        CreateOrderResult *result=[service createSessionOrderV2:[GlobalValue getGlobalValueInstance].token];
+        if (result!=nil && ![result isKindOfClass:[NSNull class]]) {
+            if ([[result resultCode] intValue]==1 || [[result resultCode] intValue]==-271) {
+                //成功
+                //当resultCode = -271时 会返回productList, 表示这些商品无法配送
+                if ([[result resultCode] intValue ] == -271 && result.productList && result.errorInfo)
+                {
+                    distributionArray =[[NSMutableArray alloc] initWithArray:result.productList];
+                    self.distributionError = result.errorInfo;
+                    [self performSelectorOnMainThread:@selector(showErrorOfDistribution) withObject:nil waitUntilDone:NO];
+                }
+                else
+                {
+                    [self performSelectorOnMainThread:@selector(enterCheckOrderByAddress) withObject:nil waitUntilDone:NO];
+                }
+            }
+            else{
+                [self performSelectorOnMainThread:@selector(showError:) withObject:[result errorInfo] waitUntilDone:NO];
+            }
+        } else {
+            [self performSelectorOnMainThread:@selector(showError:) withObject:@"网络异常，请检查网络配置..." waitUntilDone:NO];
+        }
+    }
+}
+
+//不支持商品配送的时候的处理方式
+-(void)showErrorOfDistribution
+{
+    [self.loadingView hide];
+    NSString *disMessage = self.distributionError;
+    
+    NSArray *listItems = [disMessage componentsSeparatedByString:@"收货地址"];
+    NSString * mTitle = [[listItems objectAtIndex:0] stringByAppendingString:@"收货地址"];
+    //返回的以逗号隔开
+    NSArray * mProducts = [[listItems objectAtIndex:1] componentsSeparatedByString:@","];
+    NSString * StringProduct = [mProducts objectAtIndex:0];
+    for (int i = 1; i< [mProducts count]; i++) {
+        NSString * temps = [NSString stringWithFormat:@"\r%@",[mProducts objectAtIndex:i]];
+        StringProduct = [StringProduct stringByAppendingString:temps];
+    }
+    UIAlertView *alert=[[OTSAlertView alloc] initWithTitle:mTitle message:StringProduct delegate:self cancelButtonTitle:@"修改地址" otherButtonTitles:@"删除商品", nil];
+    [alert setTag:ALERTVIEW_TAG_ORDER_DISTRIBUTION];
+	[alert show];
+	[alert release];
+}
+
+//新线程同步购物车
+-(void)newThreadSynCart
+{
+    @autoreleasepool {
+        LocalCartService *service=[[LocalCartService alloc] init];
+        NSMutableArray *tempArray = [service getLocalCartSynDateFromSqlite3];
+        if (tempArray!=nil && [tempArray count]>0 && [[tempArray objectAtIndex:0] count]>0) {
+            NSMutableArray *productIds = [tempArray objectAtIndex:0];
+            NSMutableArray *merchantIds = [tempArray objectAtIndex:1];
+            NSMutableArray *promotionIds = [tempArray objectAtIndex:2];
+            NSMutableArray *quantitys = [tempArray objectAtIndex:3];
+            
+            //landingpage
+            NSMutableArray *lproductIds = [NSMutableArray array];
+            NSMutableArray *lmerchantIds = [NSMutableArray array];
+            NSMutableArray *lpromotionIds = [NSMutableArray array];
+            NSMutableArray *lquantitys = [NSMutableArray array];
+            //普通商品
+            NSMutableArray *nproductIds = [NSMutableArray array];
+            NSMutableArray *nmerchantIds = [NSMutableArray array];
+            NSMutableArray *nquantitys = [NSMutableArray array];
+            
+            for (int i=0; i<promotionIds.count; i++) {
+                NSString* promotionId= [promotionIds objectAtIndex:i];
+                NSNumber* productId=[productIds objectAtIndex:i];
+                NSNumber* merchantId=[merchantIds objectAtIndex:i];
+                NSNumber* quantity=[quantitys objectAtIndex:i];
+                if ([promotionId rangeOfString:@"landingpage"].location!=NSNotFound) {
+                    [lpromotionIds addObject:promotionId];
+                    [lproductIds addObject:productId];
+                    [lmerchantIds addObject:merchantId];
+                    [lquantitys addObject:quantity];
+                }else{
+                    [nquantitys addObject:quantity];
+                    [nproductIds addObject:productId];
+                    [nmerchantIds addObject:merchantId];
+                }
+            }
+            
+            [NSThread sleepForTimeInterval:0.5f];
+            CartService *tempCarSer=[[[CartService alloc] init] autorelease];
+        
+            AddProductResult* result=[tempCarSer addNormalProducts:[GlobalValue getGlobalValueInstance].token productIds:nproductIds merchantIds:nmerchantIds quantitys:nquantitys];
+            if (result.resultCode.intValue==1) {
+                //看有没有landingpage商品
+                if (lpromotionIds.count>0) {
+                    CartService* ser=[[[CartService alloc] init] autorelease];
+                    AddProductResult* result2 =[ser addLandingpageProducts:[GlobalValue getGlobalValueInstance].token productIds:lproductIds merchantIds:lmerchantIds quantitys:lquantitys promotionids:lpromotionIds];
+                    if (result2.resultCode.intValue==1) {
+                        [service cleanLocalCartFromSqlite3];
+                        [self performSelectorOnMainThread:@selector(refreshCart) withObject:nil waitUntilDone:NO];
+                    }else{
+                        [self performSelectorOnMainThread:@selector(netError) withObject:nil waitUntilDone:NO];
+                    }
+                }else{
+                    [service cleanLocalCartFromSqlite3];
+                    [self performSelectorOnMainThread:@selector(refreshCart) withObject:nil waitUntilDone:NO];
+                }
+            }else{
+                [self performSelectorOnMainThread:@selector(netError) withObject:nil waitUntilDone:NO];
+            }
+
+            [self performSelectorOnMainThread:@selector(enableCart) withObject:nil waitUntilDone:NO];
+        }
+        [service release];
+    }
+}
+
+//新线程修改商品数量
+-(void)requsetUpdateCartCount{
+    @autoreleasepool {
+        CartService *cartSer=[[[CartService alloc] init] autorelease];
+        NSMutableDictionary *mDictionary=
+        [OTSUtility safeObjectAtIndex:m_CurrentIndex inArray:m_ProductArray];
+        ProductVO *productVO=[mDictionary objectForKey:@"productVO"];
+        NSNumber *updateType=[mDictionary objectForKey:@"updateType"];
+        
+        UpdateCartResult*result=nil;
+        if ([productVO.promotionId isEqualToString:@""]||[productVO promotionId]==nil) {
+            result=[cartSer updateNormalProductQuantity:[GlobalValue getGlobalValueInstance].token productId:[productVO productId] merchantId:[productVO merchantId] quantity:[NSNumber numberWithInt:m_ProductCount]];
+        }else{
+            result=[cartSer updateLandingpageProductQuantity:[GlobalValue getGlobalValueInstance].token productId:[productVO productId] merchantId:[productVO merchantId] quantity:[NSNumber numberWithInt:m_ProductCount] promotionId:[productVO promotionId]];
+            
+        }
+        //        UpdateCartResult*result=[cartSer updateCartItemQuantityV2:[GlobalValue getGlobalValueInstance].token productId:[productVO productId] merchantId:[productVO merchantId] quantity:[NSNumber numberWithInt:m_ProductCount] updateType:updateType promotionId:[productVO promotionId]];
+        if (result!=nil && ![result isKindOfClass:[NSNull class]]) {
+            if ([[result resultCode] intValue]==1) {//成功
+                [self performSelectorOnMainThread:@selector(refreshCart) withObject:productVO waitUntilDone:NO];
+            } else {
+                [self performSelectorOnMainThread:@selector(showError:) withObject:[result errorInfo] waitUntilDone:NO];
+            }
+        } else {
+            [self performSelectorOnMainThread:@selector(showError:) withObject:@"更新活动失败..." waitUntilDone:NO];
+        }
+        
+    }
+}
+
+//删除促销的商品
+-(void)deletePromotion:(ProductVO*)product{
+    @autoreleasepool {
+        CartService*cSe=[[[CartService alloc] init] autorelease];
+        int result =[cSe deletePromotionProduct:[GlobalValue getGlobalValueInstance].token productId:product.productId merchantId:product.merchantId promotionId:product.promotionId];
+        if (result==1) {
+            [self performSelectorOnMainThread:@selector(refreshCart) withObject:nil waitUntilDone:NO];
+        }else{
+            [self performSelectorOnMainThread:@selector(netError) withObject:nil waitUntilDone:NO];
+        }
+    }
+}
+
+-(void)addPromotion:(ProductVO*)product{
+    CartService*cSe=[[[CartService alloc] init] autorelease];
+    AddProductResult* result =[cSe addPromotionProduct:[GlobalValue getGlobalValueInstance].token productId:product.productId merchantId:product.merchantId quantity:[NSNumber numberWithInt:1] promotionid:product.promotionId];
+    if (result.resultCode.intValue==1) {
+        [self performSelectorOnMainThread:@selector(refreshCart) withObject:nil waitUntilDone:NO];
+    }else{
+        [self performSelectorOnMainThread:@selector(netError) withObject:nil waitUntilDone:NO];
+    }
+}
+
+//新线程满减
+-(void)updateCashPromotion:(ProductVO*)pvo{
+    @autoreleasepool {
+        ProductService*psr=[[[ProductService alloc] init] autorelease];
+        NSDictionary* delDic=nil;
+        for (NSDictionary* selectedCash in currentSelCashArray) {
+            ProductVO* tmpVO=[selectedCash valueForKey:@"productVO"];
+            if ([tmpVO.productId longValue]==[pvo.productId longValue]&&[tmpVO.promotionId isEqualToString:pvo.promotionId]) {
+                delDic=selectedCash;
+                break;
+            }
+        }
+        if (delDic!=nil) {
+            [currentSelCashArray removeObject:delDic];
+        }else{
+            //issue #4817 avoid attempt to insert nil object from objects[0]
+            if (pvo) {
+                NSDictionary* dic=[NSDictionary dictionaryWithObject:pvo forKey:@"productVO"];
+                [currentSelCashArray addObject:dic];
+            }
+        }
+        NSMutableArray* merchtidsAr=[NSMutableArray array];
+        NSMutableArray* productidAr=[NSMutableArray array];
+        NSMutableArray* promotionidAr=[NSMutableArray array];
+        NSMutableArray* quantityAr=[NSMutableArray array];
+        
+        for (NSDictionary* dic in currentSelCashArray) {
+            ProductVO* pvo=[dic valueForKey:@"productVO"];
+            [merchtidsAr addObject:pvo.merchantId];
+            [productidAr addObject:pvo.productId];
+            [promotionidAr addObject:pvo.promotionId];
+            [quantityAr addObject:[NSNumber numberWithInt:1]];//满减条数写死为1,
+        }
+        int result=[psr updateCartPromotion:[GlobalValue getGlobalValueInstance].token giftProductIdList:productidAr promotionIdList:promotionidAr merchantIdList:merchtidsAr quantityList:quantityAr Type:3];
+        if (result==1) {
+            if (delDic!=nil) {
+                [[CartCache sharedCartCache] deleteCashPromotion:pvo];
+                [self performSelectorOnMainThread:@selector(cacheCartData) withObject:nil waitUntilDone:NO];
+            }else{
+                [self performSelectorOnMainThread:@selector(refreshCart) withObject:nil waitUntilDone:NO];
+            }
+        }else{
+            [self performSelectorOnMainThread:@selector(addError:) withObject:@"添加失败，请重试!" waitUntilDone:NO];
+        }
+    }
+}
+//购物车删除 换购及赠品
+-(void)updateRedemptionAndGift:(ProductVO*)deleteProduct{
+    @autoreleasepool {
+        NSMutableArray* array=[NSMutableArray array];
+        [array addObjectsFromArray:selectedRedemptionArray];
+        [array addObjectsFromArray:m_SelectedGift];
+        
+        
+        ProductService*psr=[[[ProductService alloc] init] autorelease];
+        NSDictionary* delDic=nil;
+        for (NSDictionary* selectedCash in array) {
+            ProductVO* tmpVO=[selectedCash valueForKey:@"productVO"];
+            if ([tmpVO.productId longValue]==[deleteProduct.productId longValue]&&[tmpVO.promotionId isEqualToString:deleteProduct.promotionId]) {
+                deleteQuantity=[[selectedCash valueForKey:@"productCount"] intValue];
+                delDic=selectedCash;
+                break;
+            }
+        }
+        if (delDic!=nil) {
+            [array removeObject:delDic];
+        }
+        NSMutableArray* merchtidsAr=[NSMutableArray array];
+        NSMutableArray* productidAr=[NSMutableArray array];
+        NSMutableArray* promotionidAr=[NSMutableArray array];
+        NSMutableArray* quantityAr=[NSMutableArray array];
+        
+        for (NSDictionary* dic in array) {
+            ProductVO* pvo=[dic valueForKey:@"productVO"];
+            [merchtidsAr addObject:pvo.merchantId];
+            [productidAr addObject:pvo.productId];
+            [promotionidAr addObject:pvo.promotionId];
+            [quantityAr addObject:[NSNumber numberWithInt:[[dic valueForKey:@"productCount"] intValue]]];
+        }
+        int result=[psr updateCartPromotion:[GlobalValue getGlobalValueInstance].token giftProductIdList:productidAr promotionIdList:promotionidAr merchantIdList:merchtidsAr quantityList:quantityAr Type:1];
+        if (result==1) {
+            [self performSelectorOnMainThread:@selector(cachePromotionDelete:) withObject:deleteProduct waitUntilDone:NO];
+        }else{
+            [self performSelectorOnMainThread:@selector(addError:) withObject:@"添加失败，请重试!"  waitUntilDone:NO];
+        }
+    }
+}
+
+//-(void)promotionGiftAndRemption{
+//    [RedemptionPromotionArray removeAllObjects];
+//    [m_AllGiftArray removeAllObjects];
+//    [self otsDetatchMemorySafeNewThreadSelector:@selector(requestALLGiftAndRedemptionList) toTarget:self withObject:nil];
+//}
+-(void)cacheProductUpdate:(ProductVO*)updateProduct{
+    [[CartCache sharedCartCache] updateProduct:updateProduct newCount:m_ProductCount];
+    [self cacheCartData];
+}
+-(void)cacheProductDelete:(ProductVO*)deleteProduct{
+    [[CartCache sharedCartCache] deleteProduct:deleteProduct];
+    [[CartCache sharedCartCache] deleteQuantity:deleteQuantity];
+    [self cacheCartData];
+}
+-(void)cachePromotionDelete:(ProductVO*)deleteProduct{
+    [[CartCache sharedCartCache] deleteGiftOrRedemProduct:deleteProduct];
+    [[CartCache sharedCartCache] deleteQuantity:deleteQuantity];
+    [self cacheCartData];
+}
+-(void)deleteRedemptionAndGift:(ProductVO*)deleteProduct{
+    [self otsDetatchMemorySafeNewThreadSelector:@selector(updateRedemptionAndGift:) toTarget:self withObject:deleteProduct];
+    
+}
+#pragma mark change product mount
+-(void)countButtonTap:(UIControl *)button withEvent:(UIEvent *)event {
+	NSIndexPath *indexPath=[cartTableView indexPathForRowAtPoint:[[[event touchesForView:button] anyObject] locationInView:cartTableView]];//获得NSIndexPath
+	if (indexPath==nil) {
+		return;
+	} else {
+		m_CurrentIndex=[indexPath row];//获得选择的第几行
+		[self setProductCount];
+	}
+}
+
+//选择购买商品数量
+-(void)setProductCount
+{
+    //点击进入地区选择
+    m_ActionSheet = [[OTSActionSheet alloc]initWithTitle:@"\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+                                                delegate:self
+                                       cancelButtonTitle:nil
+                                  destructiveButtonTitle:nil
+                                       otherButtonTitles:nil];
+    [m_ActionSheet setTag:ACTION_SHEET_CHOOSE_COUNT];
+    
+    UIButton *cancelBtn = [[UIButton alloc]initWithFrame:CGRectMake(18, 5, 50, 30)];//取消按钮
+    [cancelBtn setBackgroundImage:[UIImage imageNamed:@"red_short_btn.png"] forState:0];
+    [cancelBtn addTarget:self action:@selector(closeActionSheet) forControlEvents:1];
+    [cancelBtn setTitle:@"取消" forState:0];
+    [m_ActionSheet addSubview:cancelBtn];
+    [cancelBtn release];
+    
+    UIButton *finishBtn = [[UIButton alloc]initWithFrame:CGRectMake(252, 5, 50, 30)];//完成按钮
+    [finishBtn setBackgroundImage:[UIImage imageNamed:@"red_short_btn.png"] forState:0];
+    [finishBtn addTarget:self action:@selector(finishBtnClicked:) forControlEvents:UIControlEventTouchUpInside];
+    [finishBtn setTitle:@"完成" forState:0];
+    [m_ActionSheet addSubview:finishBtn];
+    [finishBtn release];
+    if (m_PickerView==nil) {
+        m_PickerView=[[UIPickerView alloc] initWithFrame:CGRectMake(0, 40, 320, 216)];
+        m_PickerView.dataSource=self;
+        m_PickerView.delegate=self;
+        m_PickerView.showsSelectionIndicator=YES;
+    }
+    [m_ActionSheet addSubview:m_PickerView];
+    [self initPickerView:m_PickerView];
+    
+    [m_ActionSheet showInView:[UIApplication sharedApplication].keyWindow];
+    [UIView setAnimationsEnabled:NO];
+    [m_ActionSheet release];
+    [m_PickerView reloadAllComponents];
+}
+
+-(void)initPickerView:(UIPickerView *)pickerView
+{
+    [pickerView reloadComponent:0];
+    NSMutableDictionary *mDictionary=
+    [OTSUtility safeObjectAtIndex:m_CurrentIndex inArray:m_ProductArray];
+    int currentCount=[[mDictionary objectForKey:@"productCount"] intValue];
+    int minCount=[self getProductMinCountAtIndex:m_CurrentIndex];
+    if (currentCount-minCount>=0) {
+        [pickerView selectRow:currentCount-minCount inComponent:0 animated:YES];
+    }
+}
+
+//取消
+-(void)closeActionSheet
+{
+    [m_ActionSheet dismissWithClickedButtonIndex:0 animated:YES];
+}
+
+//完成
+-(void)finishBtnClicked:(id)sender
+{
+    [m_ActionSheet dismissWithClickedButtonIndex:0 animated:YES];
+    NSMutableDictionary *mDictionary=
+    [OTSUtility safeObjectAtIndex:m_CurrentIndex inArray:m_ProductArray];
+    int currentCount=[[mDictionary objectForKey:@"productCount"] intValue];
+    ProductVO* aproduct=[mDictionary objectForKey:@"productVO"];
+    NSInteger selectedRow=[m_PickerView selectedRowInComponent:0];
+    int minCount=[self getProductMinCountAtIndex:m_CurrentIndex];
+    m_ProductCount=minCount+selectedRow;
+    if (currentCount==m_ProductCount) {
+        return;
+    }
+    if ([GlobalValue getGlobalValueInstance].currentUser.enduserPoint.intValue<m_ProductCount*aproduct.activitypoint.intValue) {
+        UIAlertView* al=[[[UIAlertView alloc] initWithTitle:nil message:@"积分余额不足" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil] autorelease];
+        [al show];
+        return;
+    }
+    if ([GlobalValue getGlobalValueInstance].token!=nil) {
+        [self.loadingView showInView:self.view];
+        [self otsDetatchMemorySafeNewThreadSelector:@selector(requsetUpdateCartCount) toTarget:self withObject:nil];
+    } else {
+        [self updateLocalProductCount];
+    }
+}
+
+-(void)updateLocalProductCount
+{
+    ProductVO *productVO=[self productAtIndex:m_CurrentIndex];
+    LocalCartItemVO *localCartItemVO=[[LocalCartItemVO alloc] initWithProductVO:productVO quantity:[NSString stringWithFormat:@"%d",m_ProductCount]];
+    
+    LocalCartService *service=[[LocalCartService alloc] init];
+    //    [service updateLocalCartWithFilePath:[GlobalValue getGlobalValueInstance].localCartFileName item:localCartItemVO];
+    [service updateLocalCartItemToSqlite3:localCartItemVO];
+    [service release];
+    [localCartItemVO release];
+    [self refreshCart];
+}
+
+#pragma mark to inner method
+-(ProductVO *)productAtIndex:(int)index
+{
+    NSMutableDictionary *mDictionary=
+    [OTSUtility safeObjectAtIndex:index inArray:m_ProductArray];
+    ProductVO *productVO=[mDictionary objectForKey:@"productVO"];
+    return productVO;
+}
+
+//最近浏览
+-(void)goBrowseing:(id)sender{
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"openBrowse" object:nil];
+}
+
+//我的收藏
+-(void)goFavoriteing:(id)sender{
+    if ([GlobalValue getGlobalValueInstance].token != nil) {
+        MyFavorite *myFavorite = [[[MyFavorite alloc]initWithNibName:@"MyFavorite" bundle:nil] autorelease];
+        myFavorite->fromTag = FROM_CART_TO_FAVORITE;
+        [self pushVC:myFavorite animated:YES];
+    } else {
+        [SharedDelegate enterUserManageWithTag:12];
+    }
+}
+//显示购物车主view
+-(void)showMainViewFromTabbarMaskAnimated:(BOOL)aAnimated
+{
+    [self showMainView];
+    if (aAnimated) {
+        [SharedDelegate.tabBarController removeViewControllerWithAnimation:[OTSNaviAnimation animationPushFromLeft]];
+    } else {
+        [SharedDelegate.tabBarController removeViewControllerWithAnimation:nil];
+    }
+}
+
+-(void)showMainView
+{
+    [self removeAllMyVC];
+    if (cartTableView.editing) {
+        editBtn.tag=0;
+        [self editBtn:editBtn];
+    }
+    
+	//从vc移除已失效，许聪tabbar上面去移除
+	[cartTableView ScrollMeToTopOnly];
+}
+
+-(void)buyBtnClick{
+    if ([GlobalValue getGlobalValueInstance].token==nil)
+    {
+        [SharedDelegate enterUserManageWithTag:100];
+    } else {
+        //		int canGetGiftCount=0;
+        //		int hasChosedGiftCount=[m_SelectedGift count];
+        //		if (m_AllGiftArray!=nil && [m_AllGiftArray count]>0) {
+        //
+        //			for (MobilePromotionVO *mobilePromotionVO in m_AllGiftArray) {
+        //				int canJoin=[[mobilePromotionVO canJoin] intValue];
+        //				if (canJoin!=0) {
+        //					for(ProductVO *productVO in [mobilePromotionVO productVOList]) { //有未售完赠品
+        //						if ([productVO.isSoldOut intValue] == 0) {
+        //							canGetGiftCount++;
+        //                            break;
+        //						}
+        //					}
+        //				}
+        //			}
+        //		}
+        //		if (hasChosedGiftCount<canGetGiftCount) {
+        
+        if([[CartCache sharedCartCache].cartCache.hasFreePromotion isEqualToString:@"true"]&&m_SelectedGift.count==0){
+			UIActionSheet *actionSheet=[[OTSActionSheet alloc] initWithTitle:@"您有未领取的赠品，是否需要赠品？" delegate:self cancelButtonTitle:@"直接结算" destructiveButtonTitle:nil otherButtonTitles:@"领取赠品", nil];
+			[actionSheet setTag:ACTION_SHEET_SETTLEMENT];
+			[actionSheet showInView:[UIApplication sharedApplication].keyWindow];
+			[actionSheet release];
+		} else {
+			[self enterCheckOrder];
+		}
+	}
+}
+
+-(void)enterCheckOrder
+{
+    if ([GlobalValue getGlobalValueInstance].token!=nil)
+    {
+        [self otsDetatchMemorySafeNewThreadSelector:@selector(requsetReceiverAddressList) toTarget:self withObject:nil];
+    } else{
+        [SharedDelegate enterUserManageWithTag:100];
+    }
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"resetNNPiecesTop" object:nil];
+}
+
+-(void)enterCheckOrderByAddress
+{
+    [self enterCheckOrder:m_HasAddress];
+}
+-(void)enterCheckOrder:(BOOL)hasAddress
+{
+    if (hasAddress) {
+        [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+    }
+    
+    [self removeSubControllerClass:[CheckOrder class]];
+    
+    CheckOrder* checkOrderVC = [[[CheckOrder alloc]initWithNibName:@"CheckOrder" bundle:nil] autorelease];
+    [checkOrderVC setM_HasAddress:hasAddress];
+    [checkOrderVC setM_UserSelectedGiftArray:m_SelectedGift];
+    if ([self.distributionArray count] > 0) {
+        [checkOrderVC setDistributionArray:distributionArray];
+        [checkOrderVC setDistributionError:distributionError];
+    }
+    checkOrderVC.isFullScreen = YES;
+    
+    [SharedDelegate.tabBarController addViewController:checkOrderVC withAnimation:[OTSNaviAnimation animationPushFromRight]];
+	[checkOrderVC->m_ScrollView ScrollMeToTopOnly];
+    
+    //[self.view addSubview:m_CheckOrder.view];
+}
+-(BOOL)isJoinCashPromotion:(ProductVO*)thePVO{
+    for ( NSDictionary*dic in selectedCashPromotionArray) {
+        ProductVO*pvo=[dic valueForKey:@"productVO"];
+        if ([pvo.promotionId isEqualToString:thePVO.promotionId]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+
+-(NSString*)deliverTitle:(NSString*)allTitle ContentValue:(NSNumber*)contentVaule Description:(NSString*)des{
+    NSArray* array=[allTitle componentsSeparatedByCharactersInSet:[NSCharacterSet decimalDigitCharacterSet]];
+    NSString*head=[array objectAtIndex:0];
+    NSMutableArray *numArray=[NSMutableArray array];
+    NSMutableString* tempStr=[NSMutableString stringWithString:@""];
+    for (int i=0; i<des.length; i++) {
+        unichar singleChar= [des characterAtIndex:i];
+        int inter=(int)singleChar;
+        if (inter<58&&inter>47) {//asic判断字符0－9对应48－57
+            [tempStr appendFormat:@"%c",singleChar];
+        }else{
+            if ([tempStr intValue]) {//满减数字不会溢出吧！！
+                [numArray addObject:tempStr];
+            }
+            tempStr=[NSMutableString stringWithString:@""];
+        }
+        //numArray奇数对的时候
+        if (i==des.length-1&&(numArray.count%2)) {
+            [numArray addObject:tempStr];
+        }
+    }
+    for (int i=numArray.count-1; i>0; i--) {
+        NSString* s=[numArray objectAtIndex:i];
+        if ([contentVaule intValue]==[s intValue]) {
+            NSString* src=[numArray objectAtIndex:i-1];
+            return [NSString stringWithFormat:@"%@%@减%@",head,src,s];
+        }
+    }
+    return allTitle;
+}
+//领取赠品
+-(void)enterReceiveGift
+{
+    //没有赠品和换购的时候，是不会出现领取的入口的
+    self.promotionVC = [[[PromotionViewController alloc] init] autorelease];
+    //    int o=0;
+    //    //有换购却数据是空的，表示没取完
+    //    if (m_hasRePromtion) {
+    //        if (!RedemptionPromotionArray.count) {
+    //            o++;
+    //        }
+    //    }
+    //    //有赠品却数据是空的，表示没取完
+    //    if (m_HasGift) {
+    //        if (!m_AllGiftArray.count) {
+    //            o++;
+    //        }
+    //    }
+    //    //只要换购和赠品中有一个没取完就需要重刷
+    //    if (o>0) {
+    //        self.promotionVC.hasPassedData=NO;
+    //    }else{
+    //        self.promotionVC.hasPassedData=YES;
+    //    }
+    //    if (RedemptionPromotionArray.count||m_AllGiftArray.count) {
+    //        self.promotionVC.giftArray=[NSMutableArray arrayWithArray:m_AllGiftArray];
+    //        self.promotionVC.redemptionArray=[NSMutableArray arrayWithArray:RedemptionPromotionArray];
+    //        //        promotion.hasPassedData=YES;
+    //    }else{
+    //        //        promotion.hasPassedData=NO;
+    //    }
+    //    self.promotionVC.isCutoffShow=NO;
+    self.promotionVC.selectedGiftArray=m_SelectedGift;
+    self.promotionVC.selRedemptArray=selectedRedemptionArray;
+    self.promotionVC.cartProductArray=m_ProductArray;
+    TheStoreAppAppDelegate* delegate=(TheStoreAppAppDelegate*)[[UIApplication sharedApplication] delegate];
+    [delegate.tabBarController.view.layer addAnimation:[OTSNaviAnimation animationMoveInFromTop] forKey:@"Reveal"];
+    [delegate.tabBarController.view addSubview:self.promotionVC.view];
+    
+}
+
+
+#pragma mark error
+-(void)toastShowString:(NSString *)string
+{
+    [self.loadingView showTipInView:self.view title:string];
+    
+	[UIView setAnimationsEnabled:NO];
+}
+
+-(void)showError:(NSString *)error
+{
+    [self.loadingView hide];
+    [AlertView showAlertView:nil alertMsg:error buttonTitles:nil alertTag:ALERTVIEW_TAG_COMMON];
+}
+
+
+-(void)addError:(NSString*)error{
+    [self.loadingView hide];
+    [AlertView showAlertView:nil alertMsg:error buttonTitles:nil
+                    alertTag:ALERTVIEW_TAG_COMMON];
+}
+-(void)netError
+{
+    cartOnLoading=NO;
+    [self.loadingView hide];
+    [AlertView showAlertView:nil alertMsg:@"网络异常，请检查网络配置..." buttonTitles:nil
+                    alertTag:ALERTVIEW_TAG_COMMON];
+}
+#pragma mark  user action
+
+//领赠品
+-(void)giftBtnClicked
+{
+    if ([GlobalValue getGlobalValueInstance].token==nil)
+    {
+        [SharedDelegate enterUserManageWithTag:14];
+    } else {
+        [self enterReceiveGift];
+    }
+}
+
+-(void)cleanCart
+{
+    UIAlertView *alert=[[OTSAlertView alloc] initWithTitle:nil message:@"确认要全部删除购物车里的商品？" delegate:self cancelButtonTitle:@"取消" otherButtonTitles:@"确认删除", nil];
+    [alert setTag:ALERTVIEW_TAG_DELETE_CONFIRM];
+	[alert show];
+	[alert release];
+}
+
+
+//编辑/完成
+-(void)editBtn:(UIButton*)button
+{
+    if ([button tag] == 1) {
+        [self enterEditStatus];
+    } else {
+        [self exitEditStatus];
+    }
+}
+
+//进入编辑状态
+-(void)enterEditStatus
+{
+    [editBtn setBackgroundImage:[UIImage imageNamed:@"title_left_done.png"] forState:UIControlStateNormal];
+    [editBtn setTitle:@"" forState:UIControlStateNormal];
+    [editBtn setBackgroundImage:[UIImage imageNamed:@"title_left_done_sel.png"] forState:UIControlStateHighlighted];
+    [editBtn setTag:0];
+    
+    
+    [cartTableView setEditing:YES];
+    [cartTableView reloadData];
+    promotionTable.userInteractionEnabled=NO ;
+    [accountBtn setHidden:YES];
+    [submitBtn setHidden:YES];
+    [m_CleanBtn setHidden:NO];
+}
+
+//退出编辑状态
+-(void)exitEditStatus
+{
+    [editBtn setBackgroundImage:[UIImage imageNamed:@"title_left_normal_btn.png"] forState:UIControlStateNormal];
+    [editBtn setBackgroundImage:[UIImage imageNamed:@"title_left_normal_btn_sel.png"] forState:UIControlStateHighlighted];
+    [editBtn setTitle:@"修改" forState:UIControlStateNormal];
+    [editBtn setTag:1];
+    
+    [cartTableView setEditing:NO];
+    promotionTable.userInteractionEnabled=YES ;
+    [cartTableView reloadData];
+    [accountBtn setHidden:NO];
+    [submitBtn setHidden:NO];
+    [m_CleanBtn setHidden:YES];
+}
+
+
+-(int)getProductMinCountAtIndex:(int)index
+{
+    //限购最低数量
+    NSMutableDictionary *mDictionary=
+    [OTSUtility safeObjectAtIndex:index inArray:m_ProductArray];
+    ProductVO *productVO=[mDictionary objectForKey:@"productVO"];
+    int minCount=[[productVO shoppingCount] intValue];
+    if (minCount<=0) {
+        minCount=1;
+    }
+    return minCount;
+}
+-(void)selectCash:(UIButton*)checkBtn{
+    MobilePromotionVO*mpvo=
+    [OTSUtility safeObjectAtIndex:checkBtn.tag inArray:CashPromotionArray];
+    if (checkBtn.selected) {
+        checkBtn.selected=NO;
+    }else{
+        checkBtn.selected=YES;
+        [checkBtn setBackgroundImage:[UIImage imageNamed:@"goodReceiver_sel.png"] forState:UIControlStateNormal];
+        ProductVO*pvo=[[mpvo productVOList] objectAtIndex:0];
+        [self.loadingView showInView:self.view];
+        [self otsDetatchMemorySafeNewThreadSelector:@selector(addPromotion:) toTarget:self withObject:pvo];
+    }
+}
+// 进入1MALL购物车
+-(void)enter1mallCart{
+    DebugLog(@"enter 1mall!!!!!");
+    NSString *urlStr;
+    // 对 token 进行base64加密
+    NSData *b64Data = [GTMBase64 encodeData:[[GlobalValue getGlobalValueInstance].token dataUsingEncoding:NSUTF8StringEncoding]];
+    NSString* b64Str = [[[NSString alloc] initWithData:b64Data encoding:NSUTF8StringEncoding] autorelease];
+    
+    urlStr = [URL_BASE_MALL_NO_ONE stringByAppendingFormat:@"token=%@&osType=30&provinceId=%@",b64Str,[GlobalValue getGlobalValueInstance].provinceId];
+    
+    DebugLog(@"enterWap -- url is:\n%@",urlStr);
+    [SharedDelegate enterWap:6 invokeUrl:urlStr isClearCookie:YES];
+}
+#pragma mark alert delegate
+-(void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex
+{
+    switch ([alertView tag]) {
+        case ALERTVIEW_TAG_DELETE_CONFIRM:
+            if (buttonIndex==1) {
+                if ([GlobalValue getGlobalValueInstance].token!=nil) {
+                    [self.loadingView showInView:self.view];
+                    [self otsDetatchMemorySafeNewThreadSelector:@selector(requestDeleteAllCartItem) toTarget:self withObject:nil];
+                } else {
+                    LocalCartService *service=[[LocalCartService alloc] init];
+                    //                    [service cleanLocalCartWithFilePath:[GlobalValue getGlobalValueInstance].localCartFileName];
+                    [service cleanLocalCartFromSqlite3];
+                    [service release];
+                    [self refreshCart];
+                }
+                [[NSNotificationCenter defaultCenter] postNotificationName:@"resetNNPiecesTop" object:nil];
+            }
+            break;
+        case ALERTVIEW_TAG_ORDER_CONFIRM:
+            if (buttonIndex==1) {
+                [self enterReceiveGift];
+            } else if (buttonIndex==0) {
+                [self enterCheckOrder];
+            }
+            break;
+        case ALERTVIEW_TAG_ORDER_DISTRIBUTION:
+            if (buttonIndex==1) {
+                __block int result;
+                [self performInThreadBlock:^()
+                 {
+                     @autoreleasepool {
+                         CartService *cService=[[[CartService alloc] init] autorelease];
+                         NSMutableArray * productids = [[[NSMutableArray alloc] init] autorelease];
+                         NSMutableArray * merchantids = [[[NSMutableArray alloc] init] autorelease];
+                         NSMutableArray * promotionlist = [[[NSMutableArray alloc] init] autorelease];
+                         for (int i= 0; i< [distributionArray count]; i++) {
+                             ProductVO *vo = [distributionArray objectAtIndex:i];
+                             if (vo.productId == nil) {
+                                 vo.productId = 0;
+                             }
+                             if (vo.merchantId == nil) {
+                                 vo.merchantId = 0;
+                             }
+                             if (vo.promotionId == nil) {
+                                 vo.promotionId = @"";
+                             }
+                             [productids addObject:vo.productId];
+                             [merchantids addObject:vo.merchantId];
+                             [promotionlist addObject:vo.promotionId];
+                         }
+                         result = [cService delProducts:[GlobalValue getGlobalValueInstance].token productIds:productids merchantIds:merchantids promotionList:promotionlist];
+                     }
+                     
+                 }
+                     completionInMainBlock:^(){
+                         if (result== 1) {
+                             [self.distributionArray removeAllObjects];
+                             self.distributionError = @"";
+                             [SharedDelegate enterCartWithUpdate:YES];
+                         } else {
+                             [SharedDelegate enterCartWithTipInView:@"删除失败"];
+                         }
+                         
+                     }];
+            } else if (buttonIndex==0) {
+                //修改地址前需要创建订单
+                
+                [self performInMainBlock:^(){
+                    [self enterGoodsReceiverList];
+                }];
+                
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+//跳转到地址列表页
+-(void)enterGoodsReceiverList
+{
+	GoodReceiver* goodRecieverVC = [[[GoodReceiver alloc]initWithNibName:@"GoodReceiver" bundle:nil] autorelease];
+    [goodRecieverVC setM_FromTag:FROM_CHECK_ORDER];
+    [goodRecieverVC setIsFromCart:YES];
+    [goodRecieverVC setBackToCart:YES];
+    [goodRecieverVC setM_SelectedGift:m_SelectedGift];
+    [goodRecieverVC setM_DefaultReceiverId:nil];
+    [self pushVC:goodRecieverVC animated:YES fullScreen:YES];
+}
+
+
+-(void)actionSheet:(UIActionSheet *)actionSheet didDismissWithButtonIndex:(NSInteger)buttonIndex {
+	switch ([actionSheet tag]) {
+        case ACTION_SHEET_CHOOSE_COUNT: {
+            break;
+        }
+        case ACTION_SHEET_SETTLEMENT: {
+            if (buttonIndex==1) {
+                [self enterCheckOrder];
+            } else if (buttonIndex==0) {
+                [self enterReceiveGift];
+//                [self cartDirectToOrder];
+            }
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+#pragma mark table datasource delegate
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView{
+    if (tableView==cartTableView) {
+        return 5;
+    }
+    return 2;
+}
+
+-(NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    if (tableView==cartTableView) {
+        if (section == 0) {
+            return totalOptionCount;
+        }
+        if (section==1) {
+            return [m_ProductArray count];
+        }else if (section==2){
+            return selectedRedemptionArray.count;
+        }else if (section==3){
+            DebugLog(@"%d",m_SelectedGift.count);
+            return m_SelectedGift.count;
+        }else{
+            return selectedCashPromotionArray.count;
+        }
+    }else{
+        if (section==0) {
+            //            if (m_hasRePromtion||m_HasGift) {
+            if([[CartCache sharedCartCache].cartCache.hasFreePromotion isEqualToString:@"true"]||m_hasRePromtion){
+                return 1;
+            }
+            return 0;
+        }else{
+            if ([GlobalValue getGlobalValueInstance].token!=nil) {
+                return CashPromotionArray.count;
+            }else{
+                if (m_hasCash) {
+                    return 1;
+                }
+                return 0;
+            }
+            
+        }
+    }
+    
+}
+
+
+-(UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    if (tableView==cartTableView) {
+        //达到的满减在购物车里头不同
+        if (indexPath.section!=4) {
+            CartCell*cell=[tableView dequeueReusableCellWithIdentifier:@"CartCell"];
+            if (cell==nil) {
+                cell=[[[CartCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"CartCell"] autorelease];
+            }
+            cell.mountBtn.hidden = NO;
+            cell.priceHeadLabel.hidden = NO;
+            cell.tag = CAN_EDIT_CELL;
+            ProductVO *productVO = nil;
+            NSNumber *count = 0;
+            cell.promotionLab.hidden=YES;
+            // cell复用的初始化
+            [cell.NNArrow setImage:[UIImage imageNamed:@""]];
+            [cell setBackgroundView:nil];
+            [cell setSelectionStyle:UITableViewCellSelectionStyleBlue];
+            
+            // N元N件
+            if (indexPath.section == 0) {
+                cell.giftLabel.hidden=YES;
+                [cell.mountBtn setEnabled:NO];
+                cell.giftlog.hidden=YES;
+                cell.shakeLabel.hidden=YES;
+                cell.seckillLab.hidden=YES;
+                [cell.mountBtn setBackgroundImage:[UIImage imageNamed:@"木有图片啊啊啊"] forState:UIControlStateNormal];
+                if ([[optionalTotalList objectAtIndex:[indexPath row]] isKindOfClass:[OptionalPromotionInCartVO class]]) { // 活动模块
+                    OptionalPromotionInCartVO* tempRootVo = [optionalTotalList objectAtIndex:[indexPath row]];
+                    cell.tittleLabel.text=[tempRootVo title];
+                    [cell.priceLab setText:[NSString stringWithFormat:@"￥%.2f",[[tempRootVo contentValue] floatValue]]];
+                    [cell.mountBtn setTitle:@"1" forState:UIControlStateNormal];
+                    [cell.mountBtn setTitle:@"1" forState:UIControlStateDisabled];
+                    [cell.NNArrow setImage:[UIImage imageNamed:@"NN_cart_arrow"]];
+                    [cell.productIcon setImage:[UIImage imageNamed:@"NN_cart_logo"]];
+                    
+                    
+                    // N元N件活动LOGO。。。 看起来有点2  =。=！ 注释真是吐槽神奇啊。
+                    if ([cell.productIcon viewWithTag:199]) {
+                        [[cell.productIcon viewWithTag:199] removeFromSuperview];
+                    }
+                    if ([cell.productIcon viewWithTag:200]) {
+                        [[cell.productIcon viewWithTag:200] removeFromSuperview];
+                    }
+                    UILabel* label1 = [[UILabel alloc]initWithFrame:CGRectMake(5, 10, 50, 20)];
+                    [label1 setTextAlignment:NSTextAlignmentCenter];
+                    [label1 setTextColor:[UIColor colorWithRed:185.0/255 green:0 blue:0 alpha:1.0]];
+                    [label1 setFont:[UIFont boldSystemFontOfSize:16.0]];
+                    [label1 setTag:199];
+                    [label1 setAdjustsFontSizeToFitWidth:YES];
+                    [label1 setText:[NSString stringWithFormat:@"%@元",tempRootVo.contentValue]];
+                    UILabel* label2 = [[UILabel alloc]initWithFrame:CGRectMake(5, 30, 50, 20)];
+                    [label2 setTextAlignment:NSTextAlignmentCenter];
+                    [label2 setText:[NSString stringWithFormat:@"%@件",tempRootVo.conditionValue]];
+                    [label2 setTextColor:[UIColor colorWithRed:185.0/255 green:0 blue:0 alpha:1.0]];
+                    [label2 setFont:[UIFont boldSystemFontOfSize:16.0]];
+                    [label2 setTag:200];
+                    [cell.productIcon addSubview:label1];
+                    [cell.productIcon addSubview:label2];
+                    [label1 release];
+                    [label2 release];
+                    cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
+                    
+                }else
+                    if([[optionalTotalList objectAtIndex:[indexPath row]] isKindOfClass:[CartItemVO class]]){       // 商品模块
+                        CartItemVO* cartItemVo = [optionalTotalList objectAtIndex:[indexPath row]];
+                        ProductVO* tempProduct = [cartItemVo product];
+                        count  =  [cartItemVo buyQuantity];
+                        [cell.mountBtn setTitle:[NSString stringWithFormat:@"%@",count] forState:UIControlStateNormal];
+                        [cell.mountBtn setTitle:[NSString stringWithFormat:@"%@",count] forState:UIControlStateDisabled];
+                        //图片
+                        [cell.priceLab setText:@""];
+                        if (tempProduct.miniDefaultProductUrl!=nil&&[tempProduct.miniDefaultProductUrl isKindOfClass:[NSString class]]) {
+                            [cell downloadProductIcon:tempProduct.miniDefaultProductUrl];
+                        }
+                        cell.tittleLabel.text=[tempProduct cnName];
+                        cell.tag = CANNOT_EDIT_CELL;
+                        cell.priceHeadLabel.hidden = YES;
+                        UIView* aview = [[[UIView alloc]init]autorelease];
+                        [cell setAccessoryType:(UITableViewCellAccessoryNone)];
+                        [cell setSelectionStyle:UITableViewCellSelectionStyleNone];
+                        [aview setBackgroundColor:[UIColor colorWithRed:246.0/255 green:246.0/255 blue:246.0/255 alpha:1.0]];
+                        [cell setBackgroundView:aview];
+                    }
+                return cell;
+            }
+            //商品
+            [cell.mountBtn setBackgroundImage:[UIImage imageNamed:@"cart_number.png"] forState:UIControlStateNormal];
+            [cell.mountBtn setEnabled:YES];
+            if (indexPath.section==1) {
+                NSMutableDictionary *mDictionary=
+                [OTSUtility safeObjectAtIndex:[indexPath row] inArray:m_ProductArray];
+                productVO=[mDictionary objectForKey:@"productVO"];
+                count=[mDictionary objectForKey:@"productCount"];
+                cell.giftLabel.hidden=YES;
+                
+                [cell.mountBtn setTitle:[NSString stringWithFormat:@"%@",count] forState:UIControlStateNormal];
+                [cell.mountBtn setTitle:[NSString stringWithFormat:@"%@",count] forState:UIControlStateDisabled];
+                
+                //秒杀,且秒杀未结束且能够秒杀时 不许改库存并设置标签
+                if([productVO ifSeckillProduct] && [productVO canSecKillProduct])
+                {
+                    cell.seckillLab.hidden = NO;
+                    [cell.mountBtn setEnabled:NO];
+                    [cell.mountBtn setBackgroundColor:[UIColor colorWithRed:229.0/255 green:229.0/255 blue:229.0/255 alpha:1.0]];
+                }
+                else
+                {
+                    cell.seckillLab.hidden = YES;
+                    [cell.mountBtn setEnabled:YES];
+                    [cell.mountBtn addTarget:self action:@selector(countButtonTap:withEvent:) forControlEvents:UIControlEventTouchUpInside];
+                }
+                
+
+                //有礼品标签
+                if ([[productVO hasGift] intValue]==1) {
+                    cell.giftlog.hidden=NO;
+                    cell.mountBtn.hidden=NO;
+                }else{
+                    cell.giftlog.hidden=YES;
+                }
+                if([productVO ifSeckillProduct] && [productVO canSecKillProduct])
+                {
+                    cell.pointLab.hidden=YES;
+                    cell.mountBtn.enabled=NO;
+                    [cell.mountBtn setBackgroundColor:[UIColor colorWithRed:229.0/255 green:229.0/255 blue:229.0/255 alpha:1.0]];
+                }else if (productVO.cmsPointProduct.intValue) {
+                    cell.mountBtn.enabled=NO;
+                    [cell.mountBtn setBackgroundImage:nil forState:UIControlStateNormal];
+                    
+                    cell.pointLab.text=[NSString stringWithFormat:@"+%d积分",[productVO.activitypoint intValue]];
+                    cell.pointLab.hidden=NO;
+                }
+                else{
+                    cell.pointLab.hidden=YES;
+                    cell.mountBtn.enabled=YES;
+                    [cell.mountBtn setBackgroundImage:[UIImage imageNamed:@"cart_number.png"] forState:UIControlStateNormal];                   
+                }
+                                
+                cell.promotionCountLab.hidden=YES;
+                //摇一摇标签
+                //                if ([productVO.mobileProductType intValue]==KOTSProductTypeShakeBuy) {
+                //                    cell.shakeLabel.hidden=NO;
+                //                }else{
+                //                    cell.shakeLabel.hidden=YES;
+                //                }
+                cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
+                cell.priceLab.textColor=[UIColor colorWithRed:0.686 green:0.078 blue:0.01 alpha:1];
+            }
+            //换购
+            else if(indexPath.section==2){
+                NSDictionary* redemption=
+                [OTSUtility safeObjectAtIndex:indexPath.row inArray:selectedRedemptionArray];
+                productVO=[redemption objectForKey:@"productVO"];
+                count=[redemption objectForKey:@"productCount"];
+                cell.giftLabel.hidden=YES;
+                cell.mountBtn.hidden=YES;
+                cell.promotionCountLab.hidden=NO;
+                cell.promotionLab.hidden=NO;
+                cell.giftlog.hidden=YES;
+                cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
+                cell.promotionCountLab.text=[NSString stringWithFormat:@"%@",count];
+                cell.priceLab.textColor=[UIColor colorWithRed:0.686 green:0.078 blue:0.01 alpha:1];
+            }
+            //赠品
+            else if (indexPath.section==3){
+                NSDictionary* gift=
+                [OTSUtility safeObjectAtIndex:indexPath.row inArray:m_SelectedGift];
+                productVO=[gift objectForKey:@"productVO"];
+                count=[gift objectForKey:@"productCount"];
+                cell.giftLabel.hidden=NO;
+                cell.mountBtn.hidden=YES;
+                cell.promotionCountLab.hidden=NO;
+                cell.giftlog.hidden=YES;
+                cell.priceLab.textColor=[UIColor grayColor];
+                cell.accessoryType=UITableViewCellAccessoryNone;
+                cell.selectionStyle=UITableViewCellSelectionStyleNone;
+                cell.promotionCountLab.text=[NSString stringWithFormat:@"%@",count];
+            }
+            
+            cell.productId=productVO.productId;
+            //图片
+//            if (productVO.miniDefaultProductUrl!=nil&&[productVO.miniDefaultProductUrl isKindOfClass:[NSString class]]) {
+            //这里无需判断非空否，再方法里面已经处理过了～
+                [cell downloadProductIcon:productVO.miniDefaultProductUrl];
+//            }
+            //ISSUE #4873 EXC_BAD_ACCESS
+            cell.tittleLabel.text=productVO.cnName;
+            if (productVO.promotionId!=nil && ![productVO.promotionId isEqualToString:@""]) {
+                cell.priceLab.text=[NSString stringWithFormat:@"¥%.2f",[[productVO promotionPrice] floatValue]];
+            } else {
+                [cell.priceLab setText:[NSString stringWithFormat:@"￥%.2f",[[productVO price] floatValue]]];
+            }
+            return cell;
+        }else{
+            CartCashPromotionCell* cell=[tableView dequeueReusableCellWithIdentifier:@"cash"];
+            if (cell==nil) {
+                cell=[[[CartCashPromotionCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"cash"] autorelease];
+            }
+            if (!cartTableView.editing) {
+                cell.cashAmount.textAlignment=UITextAlignmentRight;
+            }else{
+                cell.cashAmount.textAlignment=UITextAlignmentLeft;
+            }
+            NSDictionary*dic=
+            [OTSUtility safeObjectAtIndex:indexPath.row inArray:selectedCashPromotionArray];
+            NSString* cash=[dic valueForKey:@"cashPromotionName"];
+            cell.cashDescription.text=[cash stringByReplacingOccurrencesOfString:@"指定商品" withString:@""];
+            cell.cashAmount.text=[NSString stringWithFormat:@"¥ -%@",[dic valueForKey:@"cashPromotionAmount"]];
+            return cell;
+        }
+        
+    }else {
+        static NSString* promotion=@"promotionCell";
+        PhoneCartPromotionCell* cell=[tableView dequeueReusableCellWithIdentifier:promotion];
+        if (cell==nil) {
+            cell=[[[PhoneCartPromotionCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:promotion] autorelease];
+        }
+        //赠品＋换购
+        if (indexPath.section==0) {
+            cell.titleLab.text=@"促销活动";
+            cell.descriptionLab.text=@"领取赠品,低价换购";
+            cell.descriptionLab.textColor=[UIColor colorWithRed:(68.0/255.0) green:(84.0/255.0) blue:(135.0/255.0) alpha:1];
+            [cell isNotcashCell];
+        }else {
+            //满减列表
+            if ([GlobalValue getGlobalValueInstance].token!=nil) {
+                MobilePromotionVO* mpvo=[OTSUtility safeObjectAtIndex:indexPath.row inArray:CashPromotionArray];
+                cell.titleLab.text=[self deliverTitle:mpvo.title ContentValue:mpvo.contentValue Description:mpvo.description];
+                
+                if ([mpvo.canJoin intValue]) {
+                    cell.descriptionLab.text=@"可参加";
+                    cell.descriptionLab.textColor=[UIColor colorWithRed:(68.0/255.0) green:(84.0/255.0) blue:(135.0/255.0) alpha:1];
+                    cell.checkBtn.enabled=YES;
+                    cell.checkBtn.selected=NO;
+                    [cell.checkBtn setBackgroundImage:[UIImage imageNamed:@"goodReceiver_unsel.png"] forState:UIControlStateNormal];
+                }else{
+                    if ([self  isJoinCashPromotion:[OTSUtility safeObjectAtIndex:0 inArray:[mpvo productVOList]]]) {
+                        cell.descriptionLab.text=@"已立减";
+                        [hasJoinCash setObject:[NSNumber numberWithInt:1]  forKey:[NSString stringWithFormat:@"%d",indexPath.row]];
+                        cell.descriptionLab.textColor=[UIColor colorWithRed:0.686 green:0.078 blue:0.01 alpha:1];
+                        [cell.checkBtn setBackgroundImage:[UIImage imageNamed:@"goodReceiver_sel.png"] forState:UIControlStateNormal];
+                        cell.checkBtn.selected=YES;
+                    }else{
+                        cell.checkBtn.selected=NO;
+                        cell.descriptionLab.text=@"未满足";
+                        [hasJoinCash setObject:[NSNumber numberWithInt:0] forKey:[NSString stringWithFormat:@"%d",indexPath.row]];
+                        cell.descriptionLab.textColor=[UIColor grayColor];
+                        [cell.checkBtn setBackgroundImage:[UIImage imageNamed:@"goodReceiver_unsel.png"] forState:UIControlStateNormal];
+                    }
+                    cell.checkBtn.enabled=NO;
+                }
+                
+                cell.checkBtn.tag=indexPath.row;
+                [cell.checkBtn addTarget:self action:@selector(selectCash:) forControlEvents:UIControlEventTouchUpInside];
+                cell.checkBtn.hidden=NO;
+                cell.titleLab.frame=CGRectMake(40, 0, 145, 44);
+                cell.descriptionLab.frame=CGRectMake(115, 0, 155, 44);
+                
+            }else{
+                cell.titleLab.text=@"满减活动";
+                cell.descriptionLab.text=@"登录后查看";
+                cell.descriptionLab.textColor=[UIColor colorWithRed:(68.0/255.0) green:(84.0/255.0) blue:(135.0/255.0) alpha:1];
+                cell.checkBtn.hidden=YES;
+                cell.titleLab.frame=CGRectMake(10, 0, 90, 44);
+                cell.descriptionLab.frame=CGRectMake(155, 0, 115, 44);
+                
+            }
+        }
+        return cell;
+    }
+}
+- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath{
+    
+    
+    if (tableView==cartTableView && [indexPath section] == 0 && ([[OTSUtility safeObjectAtIndex:indexPath.row inArray:optionalTotalList] isKindOfClass:[CartItemVO class]])) {  // N元N件的商品不可编辑
+        return NO;
+    }else
+        if (tableView == cartTableView) {       // 一般商品和N元N件的标题Cell可以编辑
+            return YES;
+        }
+    return NO;
+}
+- (UITableViewCellEditingStyle)tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    
+    if (tableView==cartTableView) {
+        return UITableViewCellEditingStyleDelete;
+    }
+    return UITableViewCellEditingStyleNone;
+}
+
+- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath{
+    if (tableView==cartTableView) {
+        if (indexPath.section == 0) { // 删除N元N件的活动，只有标题那个cell可以操作。
+            id aVO = [optionalTotalList objectAtIndex:[indexPath row]];
+            if ([aVO isKindOfClass:[OptionalPromotionInCartVO class]]) {
+                [self.loadingView showInView:self.view];
+                [self otsDetatchMemorySafeNewThreadSelector:@selector(deleteNNWithItem:) toTarget:self withObject:aVO];
+            }
+        }else
+            if (indexPath.section==1) {
+                m_CurrentIndex=[indexPath row];
+                if ([GlobalValue getGlobalValueInstance].token!=nil) {
+                    [self.loadingView showInView:self.view];
+                    [self otsDetatchMemorySafeNewThreadSelector:@selector(requestDeleteCartItem) toTarget:self withObject:nil];
+                } else {
+                    [self performInThreadBlock:^(){
+                        //从本地购物车删除
+                        NSMutableDictionary *mDictionary=
+                        [OTSUtility safeObjectAtIndex:m_CurrentIndex inArray:m_ProductArray];
+                        ProductVO *productVO=[mDictionary objectForKey:@"productVO"];
+                        NSNumber *productId=[productVO productId];
+                        LocalCartService *service=[[LocalCartService alloc] init];
+                        //                    [service deleteLocalCartWithFilePath:[GlobalValue getGlobalValueInstance].localCartFileName productId:productId];
+                        [service deleteLocalCartByProductIdFromSqlite3:productId];
+                        [service release];
+                    } completionInMainBlock:^(){
+                        //重新获取本地购物车
+                        [self refreshCart];
+                    }];
+                }
+            }
+            else if (indexPath.section==4){
+                NSDictionary*dic=
+                [OTSUtility safeObjectAtIndex:indexPath.row inArray:selectedCashPromotionArray];
+                [self.loadingView showInView:self.view];
+                [self otsDetatchMemorySafeNewThreadSelector:@selector(deletePromotion:) toTarget:self withObject:[dic valueForKey:@"productVO"]];
+            }else{//滑动删除购物车里头的赠品 换购
+                [self.loadingView showInView:self.view];
+                NSDictionary* dic=nil;
+                if (indexPath.section==2){
+                    dic= [OTSUtility safeObjectAtIndex:indexPath.row inArray:selectedRedemptionArray];
+                }else if (indexPath.section==3){
+                    dic=[OTSUtility safeObjectAtIndex:indexPath.row inArray:m_SelectedGift];
+                }
+                //                [self deleteRedemptionAndGift:[dic valueForKey:@"productVO"]];
+                [self otsDetatchMemorySafeNewThreadSelector:@selector(deletePromotion:) toTarget:self withObject:[dic valueForKey:@"productVO"]];
+            }
+    }
+}
+
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+	[tableView deselectRowAtIndexPath:indexPath animated:NO];
+    //UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+    if (tableView==cartTableView) {
+        m_CurrentIndex=[indexPath row];
+        NSMutableDictionary *mDictionary=nil;
+        ProductVO *productVO = nil;
+        
+        if (indexPath.section == 0) {
+            id aVO = [optionalTotalList objectAtIndex:[indexPath row]];
+            if ([aVO isKindOfClass:[OptionalPromotionInCartVO class]]) {
+                OptionalPromotionInCartVO* hotPointNewVO = aVO;
+                NSMutableArray* productArr = [NSMutableArray array];
+                for (CartItemVO* iVO in hotPointNewVO.productItems) {
+                    for (int i = 0; i < iVO.buyQuantity.intValue; i++) {
+                        [productArr addObject:[iVO product]];
+                    }
+                }
+                [self removeSubControllerClass:[OTSNNPiecesVC class]];
+                OTSNNPiecesVC* vc = [[[OTSNNPiecesVC alloc] init] autorelease];
+                [vc setPromotionId:hotPointNewVO.promotionId];
+                [vc setPromotionLevelId:hotPointNewVO.promotionLevelId];
+                [vc setNnpiecesTitle:hotPointNewVO.title];
+                [vc setTopviewproductsArray:productArr];
+                [vc setFromCart:YES];
+                [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+                [self pushVC:vc animated:YES];
+                return;
+            }else{
+                return;
+            }
+        }
+        if (indexPath.section==1)
+        {
+            mDictionary=[OTSUtility safeObjectAtIndex:m_CurrentIndex inArray:m_ProductArray];
+            productVO=[mDictionary objectForKey:@"productVO"];
+        }
+        else if (indexPath.section==2)
+        {
+            mDictionary=[OTSUtility safeObjectAtIndex:m_CurrentIndex inArray:selectedRedemptionArray];
+            productVO=[mDictionary objectForKey:@"productVO"];
+        }
+        else if (indexPath.section==4||indexPath.section==3)
+        {
+            return;
+        }
+        
+        
+        NSString *promID = (indexPath.section == 2) ? nil : productVO.promotionId;
+        
+        OTSProductDetail *productDetail=[[[OTSProductDetail alloc] initWithProductId:[productVO.productId longValue] promotionId:promID fromTag:PD_FROM_OTHER] autorelease];
+        productDetail.superVC=self;
+        productDetail.promotionPrice = productVO.promotionPrice;
+        [self pushVC:productDetail animated:YES fullScreen:NO];
+    }else{
+        if(indexPath.section==0){
+            [self giftBtnClicked];
+        }
+        else{
+            //            不需要判断是否登录，如果未登录，显示要求登录
+            if ([GlobalValue getGlobalValueInstance].token==nil) {
+                [SharedDelegate enterUserManageWithTag:14];
+            }else{
+                if (CashPromotionArray==nil||!CashPromotionArray.count>0) {
+                    return;
+                }
+                MobilePromotionVO* mobilePromotionVO =
+                [OTSUtility safeObjectAtIndex:indexPath.row inArray:CashPromotionArray];
+                CategoryProductsViewController*cateProduct=[[[CategoryProductsViewController alloc] init] autorelease] ;
+                [cateProduct setCateId:[NSNumber numberWithInt:0]];
+                [cateProduct setTitleLableText:[mobilePromotionVO title]];
+                [cateProduct setTitleText:@"全部"];
+                [cateProduct setCanJoin:[mobilePromotionVO canJoin]];
+                [cateProduct setIsJoinCash:[hasJoinCash objectForKey:[NSString stringWithFormat:@"%d",indexPath.row]]];
+                [cateProduct setPromotionId:mobilePromotionVO.promotionId];
+                [cateProduct setIsCashPromotionList:YES];
+                [cateProduct setIsFailSatisfyFullDiscount:YES];
+                [self pushVC:cateProduct animated:YES fullScreen:YES];
+            }
+        }
+    }
+}
+
+-(CGFloat)tableView:(UITableView*)tableView heightForRowAtIndexPath:(NSIndexPath*)indexPath
+{
+    if (tableView==cartTableView) {
+        if (indexPath.section!=4) {
+            return 102.0;
+        }else
+            return 44;
+    }else {
+        return 44;
+    }
+}
+
+#pragma mark pickerView相关delegate和datasource
+-(NSString *)pickerView:(UIPickerView *)pickerView titleForRow:(NSInteger)row forComponent:(NSInteger)component
+{
+    //限购最低数量
+    int minCount=[self getProductMinCountAtIndex:m_CurrentIndex];
+    return [NSString stringWithFormat:@"%d",row+minCount];
+}
+
+-(NSInteger)numberOfComponentsInPickerView:(UIPickerView *)pickerView
+{
+    return 1;
+}
+
+- (NSInteger)pickerView:(UIPickerView *)pickerView numberOfRowsInComponent:(NSInteger)component
+{
+    //限购最低数量
+    int minCount=[self getProductMinCountAtIndex:m_CurrentIndex];
+    return 100-minCount;
+}
+
+- (CGFloat)pickerView:(UIPickerView *)pickerView widthForComponent:(NSInteger)component{
+	return 90;
+}
+
+- (void)didReceiveMemoryWarning
+{
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+@end

@@ -1,0 +1,28 @@
+//
+//  SpecialRecommendInfo.h
+//  TheStoreApp
+//
+//  Created by LinPan on 13-7-17.
+//
+//  特别推荐的商品或者专题大图 对应->首页轮播图 
+
+#import <Foundation/Foundation.h>
+
+
+typedef enum
+{
+    kSpecialProduct = 1, //商品列表
+    kSpecialTopic,       //专题列表
+}kSpecialType;
+
+
+@interface SpecialRecommendInfo : NSObject<NSCoding>
+
+@property (copy, nonatomic) NSString *specialId;
+@property (copy, nonatomic) NSString *imageUrl;
+@property (copy, nonatomic) NSString *name;
+@property (assign, nonatomic) kSpecialType type;
+@property (assign, nonatomic) int sindex;
+@property (assign, nonatomic) int specialType;
+
+@end

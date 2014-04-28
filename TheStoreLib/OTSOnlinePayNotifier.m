@@ -1,0 +1,790 @@
+//
+//  OTSOnlinePayNotifier.m
+//  TheStoreApp
+//
+//  Created by Yim Daniel on 12-8-23.
+//
+//
+
+#import "OTSOnlinePayNotifier.h"
+#import "OrderV2.h"
+#import "OrderService.h"
+#import "Page.h"
+#import "GlobalValue.h"
+#import "OTSOperationEngine.h"
+#import "TheStoreAppAppDelegate.h"
+#import "OTSOnlinePayNotifyCanceller.h"
+#import "OrderCountVO.h"
+
+@interface OTSOnlinePayNotifier ()
+@property(copy)NSMutableArray     *notifyOrders;  // orders need to be notified
+@property(nonatomic, retain)NSMutableArray      *recievedNotifications;
+@property(nonatomic, retain)NSMutableArray      *operationIDs;
+@property BOOL                                  needUpdateOrders; // 控制:在用户退出时，禁止更新
+
+-(void)retrieveOrders;      // retrieved orders in process
+-(void)extractNotifyOrders; // extract orders to be notified
+
+// notify orders management
+-(void)removeFromNotifyOrdersByID:(long long int)anOrderID;
+-(BOOL)isInNotifyOrders:(long long int)anOrderID;
+-(void)notifyOrdersAddOrder:(OrderV2*)anOrder;
+
+-(void)updateNotificationBadges;
+//-(BOOL)recordScheduledNotification:(UILocalNotification*)aLocalNotification;
+@end
+
+@implementation OTSOnlinePayNotifier
+@synthesize orders = _orders
+, notifyOrders = _notifyOrders
+, appBadgeNumber = _appBadgeNumber
+, recievedNotifications = _recievedNotifications
+, operationIDs = _operationIDs
+, needUpdateOrders = _needUpdateOrders;
+
+//@dynamic storeOrderCount, mallOrderCount;
+//
+//-(int)storeOrderCount
+//{
+//    return [self orderCountWithSiteType:kSiteTypeStore];
+//}
+//
+//-(int)mallOrderCount
+//{
+//    return [self orderCountWithSiteType:kSiteTypeMall];
+//}
+
+@synthesize storeOrderCount, mallOrderCount;
+
+-(int)orderCountWithSiteType:(EOtSSiteType)aSiteType
+{
+    int count = 0;
+    NSArray * notifyOrdersCopy = [[self.notifyOrders copy] autorelease];
+    for (OrderV2 *order in notifyOrdersCopy)
+    {
+        if ([order.siteType intValue] == aSiteType)
+        {
+            count++;
+        }
+    }
+    
+    return count;
+}
+
+-(int)storeMfOrderCount
+{
+    return [self orderMfCountWithSiteType:kSiteTypeStore];
+}
+
+-(int)mallMfOrderCount
+{
+    return [self orderMfCountWithSiteType:kSiteTypeMall];
+}
+
+-(int)orderMfCountWithSiteType:(EOtSSiteType)aSiteType
+{
+    int count = 0;
+    NSArray * notifyOrdersCopy = [[self.notifyOrders copy] autorelease];
+    for (OrderV2 *order in notifyOrdersCopy)
+    {
+        if ([order.siteType intValue] == aSiteType && [order hasMeterialFlow])
+        {
+            count++;
+        }
+    }
+    
+    return count;
+}
+
+-(void)handleNotifyOrdersChanged
+{
+    DebugLog(@">>>>>>>>>set my order badge number:%d", self.notifyOrdersCount);
+    if ([SharedDelegate respondsToSelector:@selector(syncMyStoreBadge)]) {
+        [SharedDelegate performSelector:@selector(syncMyStoreBadge) withObject:nil];
+    }
+    
+    [[NSNotificationCenter defaultCenter] postNotificationName:OTS_NOTIFY_MY_ORDER_BADGE_CHANGED object:[NSNumber numberWithInt:self.notifyOrdersCount]];
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"MyStoreChanged" object:nil];
+    //[self setAppBadgeNumber:self.notifyOrdersCount];
+    self.appBadgeNumber = self.notifyOrdersCount;
+}
+
+-(void)handleRecievedNotification:(UILocalNotification*)aLocalNotification
+{
+//    if ([self recordScheduledNotification:aLocalNotification])
+//    {
+//        int badgeNum = [OTSOnlinePayNotifier sharedInstance].appBadgeNumber;
+//        DebugLog(@"original app badge number:%d", badgeNum);
+//        
+//        badgeNum++;
+//        [OTSOnlinePayNotifier sharedInstance].appBadgeNumber = badgeNum;
+//        DebugLog(@"after ++, app badge number:%d", badgeNum);
+//    }
+    [self.recievedNotifications addObject:aLocalNotification];
+}
+
+//-(BOOL)recordScheduledNotification:(UILocalNotification*)aLocalNotification
+//{
+//    BOOL hasBeenScheduled = NO;
+//    BOOL needHandleIt = YES;
+//    
+//    NSNumber* incomeOrderID = [OTSOnlinePayNotifier orderIdForNotification:aLocalNotification];
+//    DebugLog(@"notification, fireDate:%@, orderID:%@", aLocalNotification.fireDate, incomeOrderID);
+//    
+//    if (aLocalNotification && incomeOrderID)
+//    {
+//        
+//        
+//        for (UILocalNotification* theLocalNote in self.scheduledNotifications)
+//        {
+//            NSNumber* theOrderID = [OTSOnlinePayNotifier orderIdForNotification:theLocalNote];
+//            
+//            if ([theOrderID longLongValue] == [incomeOrderID longLongValue])
+//            {
+//                needHandleIt = NO; // order id is the same, dont need + 1
+//                
+//                if ([theLocalNote.fireDate isEqualToDate:aLocalNotification.fireDate])
+//                {
+//                    hasBeenScheduled = YES; // already added to scheduled array
+//                    break;
+//                }
+//            }
+//        }
+//        
+//        if (!hasBeenScheduled)
+//        {
+//            [self.scheduledNotifications addObject:aLocalNotification];
+//        }
+//    }
+//    
+//    return needHandleIt;
+//}
+
+-(void)setAppBadgeNumber:(int)appBadgeNumber
+{
+    @synchronized([self class])
+    {
+        _appBadgeNumber = appBadgeNumber;
+        DebugLog(@">>>>>>>>>set app badge number:%d", _appBadgeNumber);
+        
+        if (_appBadgeNumber == 0)
+        {
+            [self.recievedNotifications removeAllObjects];
+        }
+        
+        [UIApplication sharedApplication].applicationIconBadgeNumber = _appBadgeNumber;
+    }
+}
+
+-(int)notifyOrdersCount
+{
+    return mallOrderCount+storeOrderCount;
+    //return [self.notifyOrders count];
+}
+
+-(void)reset
+{
+    [self cancelRetrieveOrders];
+    [self removeAllNotification];
+    
+
+    [self.notifyOrders removeAllObjects];
+
+    
+    [self handleNotifyOrdersChanged];
+}
+
+#pragma mark - kvc
+-(void)observeValueForKeyPath:(NSString *)keyPath
+                     ofObject:(id)object
+                       change:(NSDictionary *)change
+                      context:(void *)context
+{
+    if (object == [GlobalValue getGlobalValueInstance]
+        && [keyPath isEqualToString:@"token"])
+    {
+        NSString* token = [GlobalValue getGlobalValueInstance].token;
+        DebugLog(@">>>token changed:%@", token);
+        if (token && [token length] > 0)
+        {
+            [self retrieveOrdersForceCleanUp:YES];
+        }
+        else
+        {
+            [self reset];
+        }
+    }
+    //类似问题 crash #1414
+    /*
+    else
+    {
+        [super observeValueForKeyPath:keyPath ofObject:object
+                               change:change context:context];
+    }*/
+}
+
+#pragma mark - memory
+-(id)init
+{
+    self = [super init];
+    if (self)
+    {
+        _notifyOrders = [[NSMutableArray alloc] initWithCapacity:10];
+        _recievedNotifications = [[NSMutableArray alloc] initWithCapacity:10];
+        _operationIDs = [[NSMutableArray alloc] initWithCapacity:10];
+        
+        [[GlobalValue getGlobalValueInstance] addObserver:self forKeyPath:@"token" options:0 context:NULL];
+    }
+    
+    return self;
+}
+
+-(void)dealloc
+{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    
+    [_orders release];
+    [_notifyOrders release];
+    [_recievedNotifications release];
+    [_operationIDs release];
+    
+    [super dealloc];
+}
+
+
+#pragma mark -
+- (void)scheduleNotificationForOrder:(OrderV2 *)anOrder minutesToFuture:(float)minutesToFuture
+{
+    
+    if (anOrder.calculatedMinutes > 0 && minutesToFuture > anOrder.calculatedMinutes)    // 提醒时间大于剩余时间
+    {
+        return;
+    }
+    
+    NSDate* notifyDate = [anOrder createDate];
+    DebugLog(@"now --> %@, minutes --> %f", notifyDate, minutesToFuture);
+    
+    if (notifyDate)
+    {
+        NSDate* scheduleDate = [notifyDate dateByAddingTimeInterval:60 * minutesToFuture]; // add minutes
+        
+        UILocalNotification *notification=[[[UILocalNotification alloc] init] autorelease];
+        notification.fireDate = scheduleDate;
+        notification.timeZone = [NSTimeZone defaultTimeZone];
+        
+        notification.userInfo = [NSDictionary dictionaryWithObject:anOrder.orderId
+                                                            forKey:OTS_ONLINE_PAY_LOCAL_NOTIFY_KEY];
+        [[UIApplication sharedApplication]   scheduleLocalNotification:notification];
+        
+        
+        DebugLog(@"notice scheduled at:\n --> fireDate:%@", notification.fireDate);
+    }
+}
+
+#pragma mark - 
+-(int)uniqueOrderCount
+{
+    int count = 0;
+
+    NSMutableArray* checkedArr = [NSMutableArray arrayWithCapacity:10];
+    
+    NSArray * notifyOrdersCopy = [[self.notifyOrders copy] autorelease];
+    for (OrderV2* theOrder in notifyOrdersCopy)
+    {
+        NSNumber* theOrderID = theOrder.orderId;
+        NSAssert(theOrderID, @"the order id for nitification is nil");
+        
+        BOOL isTheSame = NO;
+        
+        // check for order id
+        for (OrderV2* checkedOrder in checkedArr)
+        {
+            NSNumber* checkedOrderID = checkedOrder.orderId;
+            NSAssert(checkedOrderID, @"CHECKED order id for nitification is nil");
+            
+            if (checkedOrderID)
+            {
+                if ([checkedOrderID longLongValue] == [theOrderID longLongValue])
+                {
+                    // this order is the same as the previous
+                    isTheSame = YES;
+                    break;
+                }
+            }
+        }
+        
+        if (!isTheSame)
+        {
+            count++;
+            [checkedArr addObject:theOrder];
+        }
+        
+    }
+    
+    return count;
+}
+
+-(void)updateNotificationBadges
+{
+    NSArray* scheduledNotifications = [[UIApplication sharedApplication] scheduledLocalNotifications];
+
+#if 0 // sort notifications by firdate, but seemed waste since they r already sorted
+    for (UILocalNotification *notification in scheduledNotifications)
+    {
+        NSLog(@"%@", notification.fireDate);
+    }
+    
+     scheduled notification array maybe already sorted by firedate assending, here sort it again for sure
+    scheduledNotifications = [scheduledNotifications sortedArrayUsingComparator:^(id a, id b)
+    {
+        NSDate *dateA = [a valueForKey:@"fireDate"];
+        NSDate *dateB = [b valueForKey:@"fireDate"];
+        return [dateA compare:dateB];
+    }];
+#endif
+    
+    //int currentBadgeNumber = [UIApplication sharedApplication].applicationIconBadgeNumber;
+    NSMutableArray* orderIDs = [NSMutableArray arrayWithCapacity:10];
+    
+    for (int i = 0; i < scheduledNotifications.count; i++)
+    {
+        UILocalNotification *notification = [scheduledNotifications objectAtIndex:i];
+        NSNumber* orderID = [notification.userInfo objectForKey:OTS_ONLINE_PAY_LOCAL_NOTIFY_KEY];
+        if (orderID)
+        {
+            notification.applicationIconBadgeNumber = [self uniqueOrderCount];//currentBadgeNumber;
+            DebugLog(@"notification app badgeNumber:%d", notification.applicationIconBadgeNumber);
+            
+            //DebugLog(@"hasNoticeWithTheSameID:%d, currentBadgeNumber:%d, fireDate:%@", hasNoticeWithTheSameID, currentBadgeNumber, notification.fireDate);
+            
+            [orderIDs addObject:orderID];
+        }
+    }
+    
+    [[UIApplication sharedApplication] cancelAllLocalNotifications];
+    
+//#if __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_5_0
+//    [[UIApplication sharedApplication] setScheduledLocalNotifications:scheduledNotifications];
+//#else
+    for (UILocalNotification* notification in scheduledNotifications)
+    {
+        [[UIApplication sharedApplication] scheduleLocalNotification:notification];
+    }
+//#endif
+}
+
+#pragma mark - 是否需要处理此order
+-(BOOL)needHandleOrder:(OrderV2*)anOrder
+{
+    return anOrder && anOrder.orderId
+    && [anOrder isCreatedInHours:24] && [anOrder isUnpayedUsingOnlineBank];
+}
+
+#pragma mark - add notification
+-(void)doAddNotificationForOrderByID:(NSNumber*)anOrderID
+{
+    if (anOrderID)
+    {
+        OrderService* service = [[[OrderService alloc] init] autorelease];
+        OrderV2 * order = [service getOrderDetailByOrderIdEx:[GlobalValue getGlobalValueInstance].token orderId:anOrderID];
+        [self addNotificationForOrder:order];
+    }
+}
+
+-(void)addNotificationForOrderByID:(long long int)anOrderID
+{
+    [[OTSOperationEngine sharedInstance] doOperationForSelector:@selector(doAddNotificationForOrderByID:)
+                                                         target:self
+                                                         object:[NSNumber numberWithLongLong:anOrderID]
+                                                         caller:self];
+}
+
+-(void)addNotificationForOrder:(OrderV2*)anOrder
+{
+    [self addNotificationForOrder:anOrder needUpdate:YES];
+}
+
+-(void)addNotificationForOrder:(OrderV2*)anOrder needUpdate:(BOOL)aNeedUpdate
+{
+    NSLog(@"addNotificationForOrder, orderID:%@, code:%@", anOrder.orderId, anOrder.orderCode);
+    
+    if ([self needHandleOrder:anOrder])
+    {
+        BOOL orderExistsInSchedule = NO;
+        NSArray* scheduledNotification = [[UIApplication sharedApplication] scheduledLocalNotifications];
+        
+        for (UILocalNotification* localNot in scheduledNotification)
+        {
+            NSNumber* orderID = [localNot.userInfo objectForKey:OTS_ONLINE_PAY_LOCAL_NOTIFY_KEY];
+            if (orderID && [orderID longLongValue] == [anOrder.orderId longLongValue])
+            {
+                orderExistsInSchedule = YES;
+                break;
+            }
+        }
+        
+        if (!orderExistsInSchedule)
+        {
+// 测试数据：1分钟和5分钟提醒
+            
+#if 0
+            [self scheduleNotificationForOrder:anOrder minutesToFuture:1];         // after 18 seconds, for test
+            [self scheduleNotificationForOrder:anOrder minutesToFuture:5];
+#else
+
+            [self scheduleNotificationForOrder:anOrder minutesToFuture:30];         // after 30 minutes
+            [self scheduleNotificationForOrder:anOrder minutesToFuture:60 * 22];    // after 22 hours
+#endif
+            
+            // cancel after 24 hours
+            NSDate *cancelDate = [[anOrder createDate] dateByAddingTimeInterval:3600 * 24];
+            if (anOrder.calculatedMinutes > 0)
+            {
+                cancelDate = [[anOrder createDate] dateByAddingTimeInterval:anOrder.calculatedMinutes];
+            }
+            
+            [[OTSOnlinePayNotifyCanceller sharedInstance]
+             scheduleCancelingForOrderWithID:[anOrder.orderId longLongValue]
+             atDate:cancelDate];
+            
+            // record the order
+            [self notifyOrdersAddOrder:anOrder];
+            
+            // update ui
+            if (aNeedUpdate)
+            {
+                [self updateNotificationBadges];
+            }
+        }
+    }
+}
+
++(NSNumber*)orderIdForNotification:(UILocalNotification*)aNotification
+{
+    return [aNotification.userInfo objectForKey:OTS_ONLINE_PAY_LOCAL_NOTIFY_KEY];
+}
+
+#pragma mark - remove notification
+-(void)removeNotificationWithOrderID:(long long int)anOrderID
+{
+    NSArray* scheduledNotification = [[UIApplication sharedApplication] scheduledLocalNotifications];
+    for (UILocalNotification* localNot in scheduledNotification)
+    {
+        NSNumber* orderID = [OTSOnlinePayNotifier orderIdForNotification:localNot];
+        if (orderID && [orderID longLongValue] == anOrderID)
+        {
+            [[UIApplication sharedApplication] cancelLocalNotification:localNot];
+            DebugLog(@"local notification canceled, orderID:%lli, notification:%@", anOrderID, localNot);
+        }
+    }
+    
+//    for (UILocalNotification* recievedNote in self.recievedNotifications)
+//    {
+//        NSNumber* orderID = [OTSOnlinePayNotifier orderIdForNotification:recievedNote];
+//        if (orderID && [orderID longLongValue] == anOrderID) // 已经触发过此order相关通知
+//        {
+//            
+//        }
+//    }
+    
+    [[OTSOnlinePayNotifyCanceller sharedInstance] stopCancelingForOrderWithID:anOrderID];
+    [self updateNotificationBadges];
+    
+    [self removeFromNotifyOrdersByID:anOrderID];
+}
+
+-(void)removeAllNotification
+{
+    DebugLog(@"removeAllNotification");
+    
+    [[UIApplication sharedApplication] cancelAllLocalNotifications];
+    
+    [[OTSOnlinePayNotifyCanceller sharedInstance] reset];
+    
+    self.appBadgeNumber = 0;
+}
+
+#pragma mark - notify orders management
+
+-(void)notifyOrdersAddOrder:(OrderV2*)anOrder
+{
+    if (anOrder && ![self isInNotifyOrders:[anOrder.orderId longLongValue]])
+    {
+        [self.notifyOrders addObject:anOrder];
+        
+        [self handleNotifyOrdersChanged];
+    }
+}
+
+-(void)removeFromNotifyOrdersByID:(long long int)anOrderID
+{
+    OrderV2* theOrder = nil;
+    
+    NSArray * notifyOrdersCopy = [[self.notifyOrders copy] autorelease];
+    for (OrderV2* order in notifyOrdersCopy)
+    {
+        if (order && [order.orderId longLongValue] == anOrderID)
+        {
+            theOrder = order;
+            break;
+        }
+    }
+    
+    if (theOrder)
+    {
+        [self.notifyOrders removeObject:theOrder];
+        
+        [self handleNotifyOrdersChanged];
+    }
+}
+
+-(BOOL)isInNotifyOrders:(long long int)anOrderID
+{
+    NSArray * notifyOrdersCopy = [[self.notifyOrders copy] autorelease];
+    for (OrderV2* order in notifyOrdersCopy)
+    {
+        if (order && [order.orderId longLongValue] == anOrderID)
+        {
+            return YES;
+        }
+    }
+    
+    return NO;
+}
+
+-(void)refreshAllNotificationsForOrders:(NSArray*)aOrders
+{
+    [self refreshAllNotificationsForOrders:aOrders forceCleanUp:NO];
+}
+
+-(void)refreshAllNotificationsForOrders:(NSArray*)aOrders forceCleanUp:(BOOL)aForceCleanUp
+{
+    // init orders
+    DebugLog(@"refreshAllNotificationsForOrders:%@", aOrders);
+    
+    self.orders = [NSMutableArray arrayWithArray:aOrders];
+    [self extractNotifyOrders];
+    
+    
+    [[UIApplication sharedApplication] cancelAllLocalNotifications];
+    DebugLog(@"all local notifications canceled!");
+    if (aForceCleanUp)
+    {
+        self.appBadgeNumber = 0;
+    }
+    
+    NSArray * notifyOrdersCopy = [[self.notifyOrders copy] autorelease];
+    for (OrderV2* order in notifyOrdersCopy)
+    {
+        [self addNotificationForOrder:order needUpdate:NO];
+    }
+    
+    self.orders = nil;  // do clean up, to save memory
+    
+    [self updateNotificationBadges];
+}
+
+
+
+#pragma mark -
+-(void)retrieveOrders
+{
+    [self retrieveOrdersForceCleanUp:NO];
+}
+
+-(void)cancelRetrieveOrders
+{
+    self.needUpdateOrders = NO;
+    
+    for (NSNumber *opId in self.operationIDs)
+    {
+        // 看起来 cancel并不起作用...
+        [[OTSOperationEngine sharedInstance] cancelOperation:[opId intValue]];
+    }
+    
+    [self.operationIDs removeAllObjects];
+}
+
+-(void)retrieveOrdersForceCleanUp:(BOOL)aForceCleanup
+{
+    if (ISIPADDEVICE)
+    {
+        return; // ipad doesnt support now
+    }
+    
+    self.needUpdateOrders = YES;
+    
+    // retrive orders from server
+    int operationID = [[OTSOperationEngine sharedInstance] doOperationForSelector:@selector(doRetrieveOrders:)
+                                                         target:self
+                                                         object:[NSNumber numberWithBool:aForceCleanup]
+                                                         caller:self];
+    
+    [self.operationIDs addObject:[NSNumber numberWithInt:operationID]];
+}
+
+-(void)doRetrieveOrdersForceCleanup:(BOOL)aForceCleanup
+{
+//    if ([GlobalValue getGlobalValueInstance].token == nil)
+//    {
+//        self.appBadgeNumber = 0;
+//        return;
+//    }
+//    
+//    OrderService* service = [[[OrderService alloc] init] autorelease];
+//    NSArray* arr = [service getMyOrderCount:[GlobalValue getGlobalValueInstance].token orderRange:[NSNumber numberWithInt:0] siteType:[NSNumber numberWithInt:3]];
+//    for (OrderCountVO* aCountVO in arr) {
+//        if (aCountVO && aCountVO.type.intValue == 15) {
+//            self.storeOrderCount = aCountVO.count.intValue;
+//        }else if (aCountVO && aCountVO.type.intValue == 25){
+//            self.mallOrderCount = aCountVO.count.intValue;
+//        }
+//    }
+//    [self handleNotifyOrdersChanged];
+    
+//    Page* storeOrdersPage = [service getMyOrderListByToken:[GlobalValue getGlobalValueInstance].token
+//                                               type:[NSNumber numberWithInt:KOtsOrderTypeProceeding]
+//                                         orderRange:[NSNumber numberWithInt:0]  // 0为全部订单（区分普通和团购）
+//                                           siteType:[NSNumber numberWithInt:kSiteTypeStore]
+//                                        currentPage:[NSNumber numberWithInt:1]                             
+//                                           pageSize:[NSNumber numberWithInt:1000]];
+//    
+//    for (OrderV2 *order in storeOrdersPage.objList)
+//    {
+//        order.siteType = [NSNumber numberWithInt:kSiteTypeStore];
+//    }
+//    
+//    
+//    Page* mallOrdersPage = [service getMyOrderListByToken:[GlobalValue getGlobalValueInstance].token
+//                                                      type:[NSNumber numberWithInt:KOtsOrderTypeProceeding]
+//                                                orderRange:[NSNumber numberWithInt:0]  // 0为全部订单（区分普通和团购）
+//                                                  siteType:[NSNumber numberWithInt:kSiteTypeMall]
+//                                               currentPage:[NSNumber numberWithInt:1]
+//                                                  pageSize:[NSNumber numberWithInt:1000]];
+//    
+//    for (OrderV2 *order in mallOrdersPage.objList)
+//    {
+//        order.siteType = [NSNumber numberWithInt:kSiteTypeMall];
+//    }
+//    
+//    if (self.needUpdateOrders)
+//    {
+//        //self.orders = [NSMutableArray arrayWithCapacity:10];
+//        //[self.orders addObjectsFromArray:storeOrdersPage.objList];
+//        //[self.orders addObjectsFromArray:mallOrdersPage.objList];
+//        
+//        [self refreshAllNotificationsForOrders:self.orders forceCleanUp:aForceCleanup];
+//    }
+    
+}
+
+-(int)countOFProcessingOrdersInCountArr:(NSArray*)anCountArr
+{
+    if (anCountArr)
+    {
+        for (OrderCountVO * countVO in anCountArr)
+        {
+            if ([countVO.type intValue] == KOtsOrderTypeProceeding)
+            {
+                return [countVO.count intValue];
+            }
+        }
+    }
+    
+    return 0;
+}
+
+-(void)doRetrieveOrders:(id)aForceCleanUpObj
+{
+    static BOOL isRunning = NO;
+    if (!isRunning)
+    {
+        isRunning = YES;
+        BOOL forceCleanUp = [aForceCleanUpObj boolValue];
+        [self doRetrieveOrdersForceCleanup:forceCleanUp];
+        isRunning = NO;
+    }
+}
+
+-(void)extractNotifyOrders
+{
+    [_notifyOrders removeAllObjects];
+    
+    for (OrderV2* order in self.orders)
+    {
+        if ([self needHandleOrder:order])
+        {
+            [_notifyOrders addObject:order];
+        }
+    }
+    
+    [self handleNotifyOrdersChanged];
+}
+
+#pragma mark - singleton methods
+static OTSOnlinePayNotifier *sharedInstance = nil;
+
++ (OTSOnlinePayNotifier *)sharedInstance
+{
+    @synchronized(self)
+    {
+        if (sharedInstance == nil)
+        {
+            sharedInstance = [[self alloc] init];
+        }
+    }
+    
+    return sharedInstance;
+}
+
++ (id)allocWithZone:(NSZone *)zone
+{
+    @synchronized(self)
+    {
+        if (sharedInstance == nil)
+        {
+            sharedInstance = [super allocWithZone:zone];
+            return sharedInstance;
+        }
+    }
+    
+    return nil;
+}
+
+- (id)copyWithZone:(NSZone *)zone
+{
+    return self;
+}
+
+- (id)retain
+{
+    return self;
+}
+
+- (NSUInteger)retainCount
+{
+    return NSUIntegerMax;
+}
+
+- (oneway void)release
+{
+}
+
+- (id)autorelease
+{
+    return self;
+}
+
+@end
+
+/*  KNOWLEADGE
+ Xcode 4 tremplates disable NSAsserts in the release configuration. It adds
+ 
+ -DNS_BLOCK_ASSERTIONS=1
+ to "Other C Flags" for "Release".
+ 
+ From the documentation:
+ 
+ Assertions are disabled if the preprocessor macro NS_BLOCK_ASSERTIONS is defined.
+ 
+ */

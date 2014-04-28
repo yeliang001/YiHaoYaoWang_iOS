@@ -1,0 +1,147 @@
+//
+//  GameFinishViewController.m
+//  TheStoreApp
+//
+//  Created by yuan jun on 12-11-6.
+//
+//
+
+#import "GameFinishViewController.h"
+#if __IPHONE_OS_VERSION_MAX_ALLOWED>=__IPHONE_6_0
+#import <Social/Social.h>
+#endif
+#import "GlobalValue.h"
+#import "ShareToMicroBlog.h"
+#import "OTSShare.h"
+#import "ProductVO.h"
+
+#define infoLabelYPos ((iPhone5)?52:32)
+#define FlishTextImageRect ((iPhone5)?CGRectMake(12, ApplicationHeight-NAVIGATION_BAR_HEIGHT-150, 298, 70):CGRectMake(10, ApplicationHeight-NAVIGATION_BAR_HEIGHT-150, 300, 70))
+@interface GameFinishViewController ()
+
+@end
+
+@implementation GameFinishViewController
+@synthesize postImg;
+@synthesize postText;
+@synthesize postUrl;
+-(void)dealloc{
+    [postImg release];
+    [postText release];
+    [postUrl release];
+    [super dealloc];
+}
+
+- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
+{
+    self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
+    if (self) {
+        // Custom initialization
+    }
+    return self;
+}
+-(void)naviBackAction:(id)sender
+{
+    [self popSelfAnimated:YES];
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    
+    self.naviBar.titleLabel.text=@"你送我猜";
+
+    UIImageView*bg=[[UIImageView alloc] initWithFrame:CGRectMake(0, 44, 320, self.view.frame.size.height-44)];
+    if (iPhone5) {
+        bg.image=[UIImage imageNamed:@"game5_BG4.png"];
+    }else{
+        bg.image=[UIImage imageNamed:@"game_BG4.png"];
+    }
+    [self.view addSubview:bg];
+    bg.userInteractionEnabled=YES;
+    [bg release];
+
+    UIImageView*finishtext=[[UIImageView alloc] initWithFrame:FlishTextImageRect];
+    finishtext.image=[UIImage imageNamed:@"finishedText.png"];
+    [bg addSubview:finishtext];
+    [finishtext release];
+    
+    UILabel* gametitle=[[UILabel alloc] initWithFrame:CGRectMake(72, infoLabelYPos, 180, 30)];
+    gametitle.textColor=[UIColor colorWithRed:(80.0/255.0) green:(36.0/255.0) blue:(12.0/255.0) alpha:1];
+    gametitle.text=@"参与成功";
+    gametitle.backgroundColor=[UIColor clearColor];
+    gametitle.textAlignment=UITextAlignmentCenter;
+    gametitle.font=[UIFont boldSystemFontOfSize:18];
+    gametitle.shadowColor=[UIColor colorWithRed:(224.0/255.0) green:(195.0/255.0) blue:(162.0/255.0) alpha:1];
+    [bg addSubview:gametitle];
+    [gametitle release];
+
+    UIButton*backRockBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    [backRockBtn setImage:[UIImage imageNamed:@"game_toRock.png"] forState:UIControlStateNormal];
+    [backRockBtn setImage:[UIImage imageNamed:@"game_toRock_touched.png"] forState:UIControlStateHighlighted];
+    [backRockBtn addTarget:self action:@selector(ToRock) forControlEvents:UIControlEventTouchUpInside];
+    backRockBtn.frame=CGRectMake(153, bg.frame.size.height-7-36, 133, 36);
+    [bg addSubview:backRockBtn];
+
+    UIButton*playAgainBtn=[UIButton buttonWithType:UIButtonTypeCustom];
+    [playAgainBtn setImage:[UIImage imageNamed:@"game_again.png"] forState:UIControlStateNormal];
+    [playAgainBtn setImage:[UIImage imageNamed:@"game_again_touched.png"] forState:UIControlStateHighlighted];
+    playAgainBtn.frame=CGRectMake(20, bg.frame.size.height-7-36, 133, 36);
+    [playAgainBtn addTarget:self action:@selector(shareToSina) forControlEvents:UIControlEventTouchUpInside];
+    [bg addSubview:playAgainBtn];
+    
+    [self.naviBar.leftNaviBtn addTarget:self action:@selector(naviBackAction:) forControlEvents:UIControlEventTouchUpInside];
+}
+
+
+-(void)shareToSina{
+    
+#if !(TARGET_IPHONE_SIMULATOR)
+    if ([[[UIDevice currentDevice] systemVersion] floatValue]>=6.0) {
+        if ([SLComposeViewController isAvailableForServiceType:SLServiceTypeSinaWeibo]) {
+            DebugLog(@"Available");
+            
+            // 使用SLServiceTypeSinaWeibo来创建一个新浪微博view Controller
+            SLComposeViewController *socialVC = [SLComposeViewController composeViewControllerForServiceType:SLServiceTypeSinaWeibo];
+            // 写一个bolck，用于completionHandler的初始化
+            SLComposeViewControllerCompletionHandler myBlock = ^(SLComposeViewControllerResult result) {
+                if (result == SLComposeViewControllerResultCancelled) {
+                    DebugLog(@"cancelled");
+                } else
+                {
+                    DebugLog(@"done");
+                }
+                [socialVC dismissViewControllerAnimated:YES completion:Nil];
+            };
+            // 初始化completionHandler，当post结束之后（无论是done还是cancell）该blog都会被调用
+            socialVC.completionHandler = myBlock;
+            // 给view controller初始化默认的图片，url，文字信息
+            NSURL *url = [NSURL URLWithString:postUrl];
+            [socialVC setInitialText:postText];
+            [socialVC addImage:[UIImage imageNamed:@"bigGift.png"]];
+            [socialVC addURL:url];
+            // 以模态的方式展现view controller
+            [self presentViewController:socialVC animated:YES completion:Nil];
+            
+        } else {
+            DebugLog(@"UnAvailable");
+        }
+    }else{
+        [[OTSShare sharedInstance] shareToBlogWithString:[NSString stringWithFormat:@"%@%@",postText,postUrl] delegate:self];
+        
+    }
+#endif
+    
+}
+
+-(void)ToRock{
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"BackToRockGame" object:nil];
+}
+
+- (void)didReceiveMemoryWarning
+{
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+@end

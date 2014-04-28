@@ -1,0 +1,521 @@
+//
+//  TheStoreService.m
+//  TheStoreApp
+//
+//  Created by zhengchen on 11-11-23.
+//  Copyright (c) 2011年 yihaodian. All rights reserved.
+//
+#import "TheStoreService.h"
+#import "MethodBody.h"
+#import "ConnectUrl.h"
+#import "UserManageTool.h"
+#import "TheStoreAppAppDelegate.h"
+#import "GlobalValue.h"
+#import "OTSXMLParser.h"
+#import "InterfaceLog.h"
+#import "OTSDataChecker.h"
+#import "Reachability.h"
+#import "OTSUserLoginHelper.h"
+#define TIMEOUT_TIME   30
+#define USER_INSERTAPPERRORLOG     @"insertAppErrorLog"
+#define DELTATIME                  @"deltaTime"
+#define METHODNAME                 @"methodName"
+#define NETTYPE                    @"netType"
+#define USER_ERRORLOG              @"errorlog"
+#define IOSSYSTEMERROR             @"IOS ERRORLOG"
+
+//static BOOL gIsAutoLogging; //正在自动登录
+
+@interface TheStoreService ()
+@property(copy) NSString    *currentMethodName;
+@property(retain) NSString    *currentParamBody;
+@property(atomic) double st;
+@property(atomic) double cost;//接口花费的时间
+@end
+
+@implementation TheStoreService
+@synthesize currentMethodName = _currentMethodName;
+@synthesize currentParamBody = _currentParamBody;
+@synthesize st,cost;
+
+-(id)init {
+    self=[super init];	// added by: dong yiming at: 2012.5.24. reason: to obey apple's guideline
+    if (self!=nil) {
+        request=nil;
+        resultData=nil;
+        url=[[NSURL alloc] initWithString:[ConnectUrl getConnectUrlAddress]];
+    }
+    return self;
+}
+
++(TheStoreService*)defaultService {
+    TheStoreService * service = [[TheStoreService alloc] init];
+    return [service autorelease];
+}
+#pragma mark- logInterfaceInfo
+//收集接口的响应时间,不收集erroelog本身的响应时间,否则会造成循环
+-(void)LogInterface:(NSString *)methodName
+{
+    NSString *netType = [self checkNetWorkType];
+    if (![methodName isEqualToString:USER_INSERTAPPERRORLOG]) {
+        [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadLogInterface:) toTarget:self withObject:[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithDouble:cost], DELTATIME,_currentMethodName, METHODNAME,netType,NETTYPE,nil]];
+    }
+}
+//------------update interfacelog table on the background------------------
+-(void)newThreadLogInterface:(NSDictionary *) dictionary
+{
+    NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
+    NSNumber * deltaTime = [dictionary objectForKey:DELTATIME];
+    NSString * methodName = [dictionary objectForKey:METHODNAME];
+    NSString * netType = [dictionary objectForKey:NETTYPE];
+    [InterfaceLog addInterfaceLog:methodName Lag:deltaTime NetType:netType];
+    [pool drain];
+}
+-(NSString *)checkNetWorkType {
+    // 检查网络状态
+	NSString *netType = nil;
+	Reachability *r = [Reachability reachabilityWithHostName:@"www.baidu.com"];
+    switch ([r currentReachabilityStatus]) {
+		case NotReachable:
+			// 没有网络连接
+			netType = @"no";
+			break;
+		case ReachableViaWWAN:
+			// 使用3G网络
+			netType = @"3G";
+			break;
+		case ReachableViaWiFi:
+			// 使用WiFi网络
+			netType = @"WiFi";
+			break;
+    }
+	//DebugLog(@"netType:%@",netType);
+    return netType;
+}
+#pragma mark- dealRequest
++ (NSString*)serializeURL:(NSString *)baseUrl
+                   params:(NSDictionary *)params {
+    
+    NSURL* parsedURL = [NSURL URLWithString:baseUrl];
+    NSString* queryPrefix = parsedURL.query ? @"&" : @"?";
+    
+    NSMutableArray* pairs = [NSMutableArray array];
+    for (NSString* key in [params keyEnumerator]) {
+        if (([[params objectForKey:key] isKindOfClass:[UIImage class]])
+            ||([[params objectForKey:key] isKindOfClass:[NSData class]])) {
+            continue;
+        }
+        NSString* paramStr = [[NSString stringWithFormat:@"%@", [params objectForKey:key]] retain];
+        NSString* escaped_value = (NSString *)CFURLCreateStringByAddingPercentEscapes(
+                                                                                      NULL, /* allocator */
+                                                                                      (CFStringRef)paramStr,
+                                                                                      NULL, /* charactersToLeaveUnescaped */
+                                                                                      (CFStringRef)@"!*'();:@&=+$,/?%#[]",
+                                                                                      kCFStringEncodingUTF8);
+        
+        [pairs addObject:[NSString stringWithFormat:@"%@=%@", key, escaped_value]];
+        [escaped_value release];
+        [paramStr release];
+    }
+    NSString* query = [pairs componentsJoinedByString:@"&"];
+    
+    return [NSString stringWithFormat:@"%@%@%@", baseUrl, queryPrefix, query];
+}
+-(void)setBaseRequestConfig
+{
+    [request setTimeOutSeconds:TIMEOUT_TIME];
+    cost = 0.0;
+    st = [NSDate timeIntervalSinceReferenceDate];
+}
+-(void)setPostRequestWithMethodName:(NSString *)aMethodName methodBody:(MethodBody*)aMethodBody
+{
+    //去掉1号店的所有请求 linpan 2013 10 12
+    /*
+    self.currentMethodName= aMethodName;
+    self.currentParamBody= [aMethodBody toXml];
+    [request release];
+    request=[[ASIHTTPRequest requestWithURL:url] retain];
+    [request addRequestHeader:@"Content-Type" value:@"application/x-www-form-urlencoded; charset=UTF-8"];
+    [request setRequestMethod:@"POST"];
+    
+    NSString *did=[NSString stringWithFormat:@"methodName=%@&methodBody=%@",aMethodName,[aMethodBody toXml]];
+    DebugLog(@"postBody:%@",did);
+    
+    NSMutableData *postBody=[[NSMutableData alloc] init];
+    [postBody appendData:[did dataUsingEncoding:NSUTF8StringEncoding allowLossyConversion:YES]];
+    [request setPostBody:postBody];
+    [postBody release];
+    [self setBaseRequestConfig];*/
+}
+-(void)setGetRequestWithMethodName:(NSString *)aMethodName methodParam:(NSDictionary*)aParamDict
+{
+    //去掉1号店的所有请求 linpan 2013 10 12
+    /*
+    self.currentMethodName= aMethodName;
+    self.currentParamBody= aParamDict.description;
+    NSMutableString* urlString =  [[NSMutableString alloc] initWithString:url.absoluteString];
+    [urlString appendFormat:@"/%@",aMethodName];
+    DebugLog(@"urlString:%@",urlString);
+    NSString* fullUrlStr = [[self class] serializeURL:urlString params:aParamDict];
+    [urlString release];
+    
+    [url release];
+    url = [[NSURL alloc] initWithString:fullUrlStr];
+    [request release];
+    request=[[ASIHTTPRequest requestWithURL:url] retain]; 
+    [self setBaseRequestConfig];*/
+}
+-(BOOL)dealRequest
+{
+    [request startSynchronous];
+    
+    if (request.error)
+    {
+        DebugLog(@"requestErrorInfo:%@",request.error);
+        [self requestFailed:request];
+        return NO;
+    }
+    else
+    {
+        [self requestFinished:request];
+    }
+    return YES;
+}
+#pragma mark- requestResult
+-(NSString*)newTokenOfAutoLogging
+{
+    NSString* resutlStr = nil;
+    BOOL isWaitingAutoLogging = NO;
+    while ([OTSUserLoginHelper sharedInstance].isLogging)
+    {
+        isWaitingAutoLogging = YES;
+        
+        [NSThread sleepForTimeInterval:.1f];
+    }
+    
+    if (isWaitingAutoLogging) // 如果等了，获取新token
+    {
+        resutlStr = [GlobalValue getGlobalValueInstance].token;
+    }
+    return resutlStr;
+}
+-(BOOL)dealAutoLogin
+{
+    //自动登录
+    BOOL autoLoginResult = [[OTSUserLoginHelper sharedInstance] autoLogin];
+    
+    if (autoLoginResult)
+    {
+        //自动登录成功
+        if ([[[UserManageTool sharedInstance] GetUnionLogin] isEqualToString:@"UNIONLOGIN"])
+        {
+            [[GlobalValue getGlobalValueInstance] setNickName:[[UserManageTool sharedInstance] GetNickName]];
+            [[GlobalValue getGlobalValueInstance] setUserImg:[[UserManageTool sharedInstance] GetUserImg]];
+            [[GlobalValue getGlobalValueInstance] setIsUnionLogin:YES];
+        }
+        
+        return YES;
+    }
+    else
+    {
+        //自动登录失败
+        if ([[[UserManageTool sharedInstance] GetUnionLogin] isEqualToString:@"UNIONLOGIN"])
+        {
+            [[GlobalValue getGlobalValueInstance] setNickName:nil];
+            [[GlobalValue getGlobalValueInstance] setUserImg:nil];
+            [[GlobalValue getGlobalValueInstance] setIsUnionLogin:NO];
+        }
+    }
+    return NO;
+}
+-(NSObject*)resultObjcetDealResutData:(NSData*)aResultData
+                           methodName:(NSString*)aMethodName
+                           paramBody:(NSString*)aParamBody
+                        isTokenTimeOut:(BOOL*)pTokenTimeOut
+{
+    
+    
+    
+    if(!aResultData)
+        return nil;
+    
+#if defined (NEW_XML_PARSER_ENABLED)
+    OTSXMLParser* xStream = [[[OTSXMLParser alloc] init] autorelease];
+    NSObject *tempResult=[xStream fromXML:resultData];
+#else
+    XStream *xStream=[[[XStream alloc] init] autorelease];
+    [xStream setCurrentMethodName:aMethodName];
+    [xStream setCurrentParamBody:aParamBody];
+    NSObject *tempResult=[[xStream fromXML:resultData]retain];
+    if(pTokenTimeOut)
+        *pTokenTimeOut = xStream.tokenTimeOut;
+#endif
+    
+    if(resultData!=nil){
+        [resultData release];
+        resultData=nil;
+    }
+    if (tempResult==nil) {
+        return nil;
+    } else {
+        return [tempResult autorelease];
+    }
+}
+
+-(NSObject*)getReturnObjectEx:(NSString *)methodName
+             requestParameter:(NSMutableDictionary*)paramDict
+{
+    [self setGetRequestWithMethodName:methodName
+                          methodParam:paramDict];
+    if(![self dealRequest])
+        return nil;
+    
+    return [self resultObjcetDealResutData:resultData
+                                methodName:methodName
+                                 paramBody:paramDict.description
+                            isTokenTimeOut:nil];
+}
+//不带token过期自动登录的接口
+-(NSObject*)getReturnObjectEx:(NSString *)methodName methodBody:(MethodBody*)methodBody
+{
+   
+    
+//    request=[ASIHTTPRequest requestWithURL:url];
+//    [request addRequestHeader:@"Content-Type" value:@"application/x-www-form-urlencoded; charset=UTF-8"];
+//    [request setRequestMethod:@"POST"];
+//    
+//    NSString *did=[NSString stringWithFormat:@"methodName=%@&methodBody=%@",methodName,[methodBody toXml]];
+//    
+//    NSMutableData *postBody=[[NSMutableData alloc] init];
+//    [postBody appendData:[did dataUsingEncoding:NSUTF8StringEncoding allowLossyConversion:YES]];
+//    [request setPostBody:postBody];
+//    [postBody release];
+    
+    [self setPostRequestWithMethodName:methodName methodBody:methodBody];
+    
+    
+//    [request startSynchronous];
+//    
+//    if (request.error)
+//    {
+//        [self requestFailed:request];
+//        return nil;
+//    }
+//    else
+//    {
+//        [self requestFinished:request];
+//    }
+    if(![self dealRequest])
+        return nil;
+    
+    return [self resultObjcetDealResutData:resultData
+                                methodName:methodName paramBody:[methodBody toXml]
+                            isTokenTimeOut:nil];
+    
+//#if defined (NEW_XML_PARSER_ENABLED)
+//    OTSXMLParser* xStream = [[[OTSXMLParser alloc] init] autorelease];
+//    NSObject *tempResult=[xStream fromXML:resultData];
+//#else
+//    XStream *xStream=[[[XStream alloc] init] autorelease];
+//    [xStream setCurrentMethodName:methodName];
+//    [xStream setCu:[methodBody toXml]];
+//    NSObject *tempResult=[xStream fromXML:resultData];
+//#endif
+//    
+//    if(resultData!=nil){
+//        [resultData release];
+//        resultData=nil;
+//    }
+//    
+//    if (tempResult==nil) {
+//        return nil;
+//    } else {
+//        NSObject *ret=[tempResult retain];
+//        return [ret autorelease];
+//    }
+}
+
+- (void)requestFinished:(ASIHTTPRequest *)_request
+{
+    resultData = [[NSData alloc] initWithData:[_request responseData]];
+    double et = [NSDate timeIntervalSinceReferenceDate];
+    cost = resultData==nil?-1l:et-st;
+    [self LogInterface:_currentMethodName];
+#if defined(DEBUG)
+    
+    NSMutableString* responseInfoStr = [[[NSMutableString alloc] initWithData:resultData encoding:NSUTF8StringEncoding] autorelease];
+    NSDateFormatter *markDateFormat = [[[NSDateFormatter alloc] init] autorelease];
+    [markDateFormat setDateFormat:@"HH:mm:ss:SSS"];
+    NSString *markdateString=[markDateFormat stringFromDate:[NSDate date]];
+    if (_currentMethodName == nil)
+    {
+        DebugLog(@"_currentMethodName is nil");
+    }
+    
+#if !defined (BUILDING_LIBRARY)
+    DebugLog(@"[TheStoreService] \n{RESP_DATA}:\n   %@ \n{METHOD}:   %@ \n{ENV}:   %@ \n{COST}:   %f \n{STARTTIME}:   %@", responseInfoStr, _currentMethodName, [ConnectUrl descriptionForEnviorenment],cost,markdateString);
+#else
+    DebugLog(@"[TheStoreService] \n{RESP_DATA}:\n   %@ \n{METHOD}:   %@", responseInfoStr, _currentMethodName);
+#endif
+    
+#endif
+    
+//    if (request == _request)
+//    {
+//        request = nil;
+//    }
+}
+
+- (void)requestFailed:(ASIHTTPRequest *)_request{
+    cost = -1l;
+    //--------------1.http请求异常做记录收集----------------------
+    [self LogInterface:_currentMethodName];
+    //xml 转义
+    NSMutableString *mutabxml = [NSMutableString stringWithString:_currentParamBody];
+    [self replaceString:@"<" withString:@"＜" forString:mutabxml];
+    [self replaceString:@">" withString:@"＞" forString:mutabxml];
+    [SharedDelegate insertAppErrorLog:[NSString stringWithFormat:@"%@｜%@",request.error.debugDescription,mutabxml] methodName:_currentMethodName];
+    if(resultData!=nil){
+        [resultData release];
+        resultData=nil;
+    }
+    [request cancel];
+    
+    if (request == _request)
+    {
+        request = nil;
+    }
+}
+
+//---- 尖括号转义
+-(void)replaceString:(NSString*)anOriginString
+          withString:(NSString*)aNewString
+           forString:(NSMutableString*)aParentString
+{
+    if (aParentString && anOriginString && aNewString)
+    {
+        [aParentString replaceOccurrencesOfString:anOriginString withString:aNewString options:NSLiteralSearch range:NSMakeRange(0, [aParentString length])];
+    }
+}
+
+#pragma mark- interface
+-(NSObject*)getReturnObject:(NSString *)methodName
+           requestParameter:(NSMutableDictionary*)paramDict
+{
+    //去掉1号店的所有请求 linpan 2013 10 12
+    /*
+    NSString* newToken = [self newTokenOfAutoLogging];
+    NSString* oldToken = [paramDict objectForKey:@"token"];
+    //自动登陆成功后使用新的token
+    if (oldToken && newToken && ![newToken isEqualToString:oldToken])
+    {
+        [paramDict setObject:newToken forKey:@"token"];
+    }
+    [self setGetRequestWithMethodName:methodName methodParam:paramDict];
+    if(![self dealRequest])
+        return nil;
+    BOOL tokenTimeOut = NO;
+    DebugLog(@"Param:%@",paramDict.description);	
+    
+    NSObject *tempResult = [self resultObjcetDealResutData:resultData
+                                                methodName:methodName
+                                                 paramBody:paramDict.description
+                                            isTokenTimeOut:&tokenTimeOut];
+    //token过期后自动登录
+    if (tempResult==nil && tokenTimeOut)
+    {
+        // 如果token过期时，用户已经退出了登录，就不再进行自动登录了
+        if ([GlobalValue getGlobalValueInstance].token==nil) {
+            return nil;
+        }
+        NSString* newToken = [self newTokenOfAutoLogging];
+        if (oldToken && newToken && ![newToken isEqualToString:oldToken])
+        {
+            [paramDict setObject:newToken forKey:@"token"];
+            //发送请求
+            return [self getReturnObjectEx:methodName requestParameter:paramDict];
+        }
+        if([self dealAutoLogin])
+        {
+            NSString *newToken=[OTSUserLoginHelper sharedInstance].loginResult.token;
+            if (oldToken && newToken && ![newToken isEqualToString:oldToken])
+            {
+                [paramDict setObject:newToken forKey:@"token"];
+                
+                return [self getReturnObjectEx:methodName requestParameter:paramDict];;
+            }
+        }
+        
+    }
+    return tempResult;
+    */
+
+}
+-(NSObject*)getReturnObject:(NSString *)methodName methodBody:(MethodBody*)methodBody
+{
+    //去掉1号店的所有请求 linpan 2013 10 12
+    /*
+    NSString* newToken = [self newTokenOfAutoLogging];
+    NSString *oldToken=[methodBody token];
+    //自动登陆成功后使用新的token
+    if (oldToken && newToken && [[methodBody data] rangeOfString:oldToken].location != NSNotFound)
+    {
+        NSString *newData = [[methodBody data] stringByReplacingOccurrencesOfString:oldToken withString:newToken];
+        [methodBody setData:newData];
+    }
+
+    [self setPostRequestWithMethodName:methodName methodBody:methodBody];
+
+    if(![self dealRequest])
+        return nil;
+    BOOL tokenTimeOut = NO;
+    NSObject *tempResult = [self resultObjcetDealResutData:resultData
+                                                methodName:methodName
+                                                 paramBody:[methodBody toXml]
+                                            isTokenTimeOut:&tokenTimeOut];
+
+    
+    //token过期后自动登录
+    if (tempResult==nil && tokenTimeOut)
+    {
+        // 如果token过期时，用户已经退出了登录，就不再进行自动登录了
+        if ([GlobalValue getGlobalValueInstance].token==nil) {
+            return nil;
+        }
+        NSString* newToken = [self newTokenOfAutoLogging];
+        NSString *oldToken=[methodBody token];
+        if (oldToken && newToken && [[methodBody data] rangeOfString:oldToken].location != NSNotFound)
+        {
+            NSString *newData=[[methodBody data] stringByReplacingOccurrencesOfString:oldToken withString:newToken];
+            [methodBody setData:newData];
+            return [self getReturnObjectEx:methodName methodBody:methodBody];
+        }
+
+        if([self dealAutoLogin])
+        {
+            NSString *oldToken=[methodBody token];
+            NSString *newToken=[OTSUserLoginHelper sharedInstance].loginResult.token;
+            if (oldToken!=nil && newToken!=nil && [[methodBody data] rangeOfString:oldToken].location!=NSNotFound)
+            {
+                NSString *newData=[[methodBody data] stringByReplacingOccurrencesOfString:oldToken withString:newToken];
+                [methodBody setData:newData];
+                return [self getReturnObjectEx:methodName methodBody:methodBody];
+            }
+        }
+    }
+    return tempResult;*/
+}
+
+#pragma mark- dealloc
+-(void)dealloc
+{
+    OTS_SAFE_RELEASE(url);
+    OTS_SAFE_RELEASE(_currentMethodName);
+    [request setDelegate:nil];
+    [request release];
+    [_currentParamBody release];
+    
+    [super dealloc];
+}
+
+@end

@@ -1,0 +1,81 @@
+//
+//  QuitOrderPicBrowser.m
+//  TheStoreApp
+//
+//  Created by yuan jun on 13-4-12.
+//
+//
+
+#import "QuitOrderPicBrowser.h"
+
+@interface QuitOrderPicBrowser ()
+
+@end
+
+@implementation QuitOrderPicBrowser
+
+- (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
+{
+    self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
+    if (self) {
+        // Custom initialization
+    }
+    return self;
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    
+    UIImageView* nav=[[UIImageView alloc] initWithFrame:CGRectMake(0, 0, 320, 44)];
+    nav.userInteractionEnabled=YES;
+    nav.image=[UIImage imageNamed:@"title_bg.png"];
+    [self.view addSubview:nav];
+    [nav release];
+    //    CGFloat height=0;
+    UIButton* back=[UIButton buttonWithType:UIButtonTypeCustom];
+    back.frame=CGRectMake(0, 0, 61, 44);
+    
+    [back setImage:[UIImage imageNamed:@"title_left_btn.png"] forState:UIControlStateNormal];
+    [back setImage:[UIImage imageNamed:@"title_left_btn_sel.png"] forState:UIControlStateHighlighted];
+    
+    [back addTarget:self action:@selector(cancelClick) forControlEvents:UIControlEventTouchUpInside];
+    [nav addSubview:back];
+    //    UIBarButtonItem*libItm=[[UIBarButtonItem alloc] initWithCustomView:back];
+    //    viewController.navigationItem.leftBarButtonItem=libItm;
+    //
+    //    [libItm release];
+    
+    UILabel* tit=[[UILabel alloc] initWithFrame:CGRectMake(61, 0, 320-122, 44)];
+    tit.text=@"上传图片";
+    tit.textAlignment=UITextAlignmentCenter;
+    tit.textColor=[UIColor whiteColor];
+    tit.font=[UIFont boldSystemFontOfSize:20];
+    tit.shadowOffset=CGSizeMake(1, -1);
+    tit.backgroundColor=[UIColor clearColor];
+    [nav addSubview:tit];
+    [tit release];
+    
+    UIButton* submit=[UIButton buttonWithType:UIButtonTypeCustom];
+    submit.frame=CGRectMake(320-61, 0, 61, 44);
+    [submit addTarget:self action:@selector(DeletePic) forControlEvents:UIControlEventTouchUpInside];
+//    [submit setTitle:@"确定" forState:UIControlStateNormal];
+    [submit setImage:[UIImage imageNamed:@"cameraPhotoToTrash.png"] forState:UIControlStateNormal];
+    [submit setImage:[UIImage imageNamed:@"cameraPhotoToTrash_sel.png"] forState:UIControlStateHighlighted];
+    [nav addSubview:submit];
+
+    
+    scrollV=[[UIScrollView alloc] initWithFrame:CGRectMake(0, 44, 320, 460-44-49)];
+    
+	// Do any additional setup after loading the view.
+}
+-(void)DeletePic{
+    
+}
+- (void)didReceiveMemoryWarning
+{
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+@end

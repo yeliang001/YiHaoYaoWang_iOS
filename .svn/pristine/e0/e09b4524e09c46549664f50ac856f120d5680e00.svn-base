@@ -1,0 +1,12 @@
+// 查看商品详情
+-(void)butClick:(UIButton *)but
+{
+    ProductDescVO *productDesc=[productDescList objectAtIndex:but.tag];
+    NSString* htmlStr = [self htmlWithCssFromHtml:productDesc.tabDetail];
+    
+    [detailWebView loadHTMLString:htmlStr baseURL:nil];
+    
+
+    [detailScrollView setContentOffset:CGPointMake(0, kScrollMaxY) animated:YES];
+    [self loadView2];
+}

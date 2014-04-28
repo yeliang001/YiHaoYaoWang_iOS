@@ -1,0 +1,106 @@
+//
+//  OTSNavigationBar.m
+//  TheStoreApp
+//
+//  Created by yiming dong on 12-7-27.
+//  Copyright (c) 2012年 __MyCompanyName__. All rights reserved.
+//
+
+#import "OTSNavigationBar.h"
+#import "OTSUtility.h"
+
+@interface OTSNavigationBar ()
+
+@property(nonatomic, copy)NSString        *titleString;
+@property(nonatomic, copy)NSString        *backTitle;
+@property(nonatomic, assign)SEL           backAction;
+@property(nonatomic, assign)id           backActionTarget;
+@end
+
+@implementation OTSNavigationBar
+@synthesize titleLabel, titleString, backTitle, backAction, backActionTarget;
+@synthesize leftNaviBtn = _leftNaviBtn;
+-(void)extraInit
+{
+    CGRect appFrame = [UIScreen mainScreen].applicationFrame;
+    
+    // 导航条背景
+    UIImage* naviBarImage = [UIImage imageNamed:@"title_bg.png"];
+    UIImageView* naviBgImageView = [[[UIImageView alloc] initWithImage:naviBarImage] autorelease];
+    CGRect naviRect = naviBgImageView.frame;
+    naviRect.size.height = NAVIGATION_BAR_HEIGHT;
+    naviRect.size.width = appFrame.size.width;
+    naviBgImageView.frame = naviRect;
+    [self addSubview:naviBgImageView];
+    self.frame = naviRect;
+    
+    // 导航条文字
+    self.titleLabel = [[[UILabel alloc] initWithFrame:naviBgImageView.bounds] autorelease];
+    titleLabel.text = titleString;
+    titleLabel.textAlignment = NSTextAlignmentCenter;
+    titleLabel.textColor = [UIColor whiteColor];
+    titleLabel.backgroundColor = [UIColor clearColor];
+    titleLabel.font = [UIFont boldSystemFontOfSize:20.f];
+    [OTSUtility setShadowForView:titleLabel];
+    [self addSubview:titleLabel];
+    
+    // 导航条左侧按钮
+    if (backTitle)
+    {
+        self.leftNaviBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+
+        self.leftNaviBtn.titleLabel.font = [UIFont boldSystemFontOfSize:13.f];
+        [OTSUtility setShadowForView:self.leftNaviBtn.titleLabel];
+        self.leftNaviBtn.frame = CGRectMake(NAVIGATION_BTN_MARGIN_X, NAVIGATION_BTN_MARGIN_Y, NAVIGATION_BTN_WIDTH, NAVIGATION_BTN_HEIGHT);
+       // [leftNaviBtn setTitle:backTitle forState:UIControlStateNormal];
+        [self.leftNaviBtn setBackgroundImage:[UIImage imageNamed:@"title_left_btn.png"] forState:UIControlStateNormal];
+        [self.leftNaviBtn setBackgroundImage:[UIImage imageNamed:@"title_left_btn_sel.png"] forState:UIControlStateHighlighted];
+        [self.leftNaviBtn addTarget:backActionTarget action:backAction forControlEvents:UIControlEventTouchUpInside];
+        [self addSubview:self.leftNaviBtn];
+    }
+}
+-(void)setLeftBtnImg:(UIImage*)normal highlight:(UIImage*)highLigth{
+    [self.leftNaviBtn setBackgroundImage:normal forState:UIControlStateNormal];
+    [self.leftNaviBtn setBackgroundImage:highLigth forState:UIControlStateHighlighted];
+}
+- (id)initWithTitle:(NSString*)aTitle 
+          backTitle:(NSString*)aBackTitle 
+         backAction:(SEL)aBackAction 
+   backActionTarget:(id)aBackActionTarget
+{
+    self = [super initWithFrame:CGRectZero];
+    if (self)
+    {
+        titleString = [aTitle copy];
+        backTitle = [aBackTitle copy];
+        backAction = aBackAction;
+        backActionTarget = aBackActionTarget;
+        [self extraInit];
+    }
+    
+    return self;
+}
+
+- (id)initWithTitle:(NSString*)aTitle
+{
+    self = [super initWithFrame:CGRectZero];
+    if (self)
+    {
+        titleString = [aTitle copy];
+        
+        [self extraInit];
+    }
+    return self;
+}
+
+-(void)dealloc
+{
+    OTS_SAFE_RELEASE(titleLabel);
+    OTS_SAFE_RELEASE(titleString);
+    OTS_SAFE_RELEASE(backTitle);
+    [_leftNaviBtn release];
+    
+    [super dealloc];
+}
+
+@end

@@ -1,0 +1,71 @@
+//
+//  ProductInfo.h
+//  TheStoreApp
+//
+//  Created by LinPan on 13-8-5.
+//
+//
+
+#import <Foundation/Foundation.h>
+
+@interface ProductInfo : NSObject
+
+
+@property (copy,nonatomic)NSString *productId;
+@property (copy,nonatomic)NSString *name;
+@property (copy,nonatomic)NSString *category;
+@property (copy,nonatomic)NSString *brandId;
+@property (copy,nonatomic)NSString *brandName;
+@property (copy,nonatomic)NSString *productImageUrl; 
+@property (copy,nonatomic)NSString *time;         //上市时间
+@property (copy,nonatomic)NSString *price;        //价格
+@property (copy,nonatomic)NSString *marketPrice;  //市场价
+@property (copy,nonatomic)NSString *status;       //8上架  4下架
+@property (copy,nonatomic)NSString *store;        //各个仓对应库存  "1_0,2_0,3_0,4_0,5_0"
+@property (copy,nonatomic)NSString *saleType;     //销售类型
+@property (copy,nonatomic)NSString *showPic;      //左上角显示图标类型
+@property (copy,nonatomic)NSString *subTotalScore;//综合得分
+@property (copy,nonatomic)NSString *littlePic;    //商品下方小图标
+@property (copy,nonatomic)NSString *userGrade;    //用户好评等级
+@property (copy,nonatomic)NSString *userGradeCount;
+@property (copy,nonatomic)NSString *comments;     //总评论数
+@property (retain,nonatomic)NSArray *commentList; //评论列表
+@property (copy,nonatomic)NSString *salesCount;   //销售数
+@property (copy,nonatomic)NSString *attribute;    //属性列表
+@property (copy,nonatomic)NSString *specialStatus;//是否系列品
+@property (copy,nonatomic)NSString *filter;       //过滤 eg:2_6,3_4,3_16,1_9
+@property (copy,nonatomic)NSString *prescription; //药品类型（1普通药 12器械 14处方药可购买 16处方药）
+@property (copy,nonatomic)NSString *morePrice;    //一品多价
+//商品详细页中新增
+@property (copy,nonatomic)NSString *categoryId;   //对应catalogid
+@property (copy,nonatomic)NSString *categoryName;
+@property (copy,nonatomic)NSString *color;
+@property (copy,nonatomic)NSString *count;
+@property (copy,nonatomic)NSString *gift;
+@property (copy,nonatomic)NSString *mainImg1;
+@property (copy,nonatomic)NSString *mainImg2;
+@property (copy,nonatomic)NSString *mainImg3;
+@property (copy,nonatomic)NSString *mainImg4;
+@property (copy,nonatomic)NSString *mainImg5;
+@property (copy,nonatomic)NSString *mainImg6;
+@property (copy,nonatomic)NSString *mainInfo;
+@property (copy,nonatomic)NSString *mainPush;
+@property (copy,nonatomic)NSString *productNO;
+@property (copy,nonatomic)NSString *recommendPrice;
+@property (copy,nonatomic)NSString *saleInfo;
+@property (copy,nonatomic)NSString *saleService; //eg:批准文号1000006
+@property (copy,nonatomic)NSString *sellType;
+@property (copy,nonatomic)NSString *seriesId;
+@property (copy,nonatomic)NSString *seriesName;
+@property (copy,nonatomic)NSString *size;
+@property (copy,nonatomic)NSString *sellerId;  //卖家id号 
+@property (retain,nonatomic)NSArray *taocanList;
+@property (copy,nonatomic)NSString *unit;
+@property (copy,nonatomic)NSString *desc;
+
+@property (copy,nonatomic)NSArray *middleDetailImgList; //中辅图
+@property (copy,nonatomic)NSArray *largeDetailImgList;  //大辅图
+
+
+
+@end

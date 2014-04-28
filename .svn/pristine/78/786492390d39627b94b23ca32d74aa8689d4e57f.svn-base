@@ -1,0 +1,840 @@
+//
+//  OTSProductDetail.m
+//  TheStoreApp
+//
+//  Created by jiming huang on 12-10-29.
+//  Copyright (c) 2012年 __MyCompanyName__. All rights reserved.
+//
+
+#define THREAD_STATUS_GET_PRODUCT_DETAIL    1
+#define THREAD_STATUS_GET_DESCRIPTION  2
+#define THREAD_STATUS_GET_COMMENT   3
+
+#define ACTION_SHEET_SHARE  1
+
+#import "OTSProductDetail.h"
+#import "ProductService.h"
+#import "GlobalValue.h"
+#import "SDImageView+SDWebCache.h"
+#import "StrikeThroughLabel.h"
+#import "OTSTabView.h"
+#import "ProductVO.h"
+#import "OTSUtility.h"
+#import "OTSProductImagesView.h"
+#import "OTSAnimationTableView.h"
+#import "OTSInterestedProducts.h"
+#import "OTSNaviAnimation.h"
+#import "OTSProductDescriptionView.h"
+#import "OTSProductCommentView.h"
+#import "OTSProductCommentViewV2.h"
+#import "BrowseService.h"
+#import "TheStoreAppAppDelegate.h"
+#import "OTSShare.h"
+#import "DoTracking.h"
+#import "CategoryProductsViewController.h"
+#import "OTSNNPiecesVC.h"
+#import "GTMBase64.h"
+
+#import "YWProductService.h"
+#import "ProductInfo.h"
+#import "YWFavoriteService.h"
+#import "UserInfo.h"
+#import "CommentInfo.h"
+@interface OTSProductDetail()
+
+-(void)initProductDetail;
+-(void)setUpThread:(BOOL)showLoading;
+-(void)stopThread;
+-(void)newThreadGetProductDetail;
+-(void)newThreadGetDescription;
+-(void)newThreadGetComment;
+@end
+
+@implementation OTSProductDetail
+@synthesize promotionPrice = _promotionPrice;
+@synthesize pointIn;
+@synthesize superVC;
+-(id)initWithProductVO:(ProductInfo *)productVo fromTag:(OTSProductDetailFromTag)fromTag{
+    self=[super init];
+    if (self) {
+        m_ProductDetailVO=[productVo retain];
+        m_FromTag=fromTag;
+    }
+    return self;
+}
+-(id)initWithProductId:(long)productId promotionId:(NSString *)promotionId fromTag:(OTSProductDetailFromTag)fromTag
+{
+    self=[super init];
+    if (self!=nil) {
+        m_ProductId=productId;
+        if (promotionId==nil)
+        {
+            m_PromotionId=[[NSString alloc] initWithString:@""];
+        } else {
+            m_PromotionId=[[NSString alloc] initWithString:promotionId];
+        }
+        m_FromTag=fromTag;
+    }
+    return self;
+}
+
+
+#pragma mark - View lifecycle
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    // Do any additional setup after loading the view from its nib.
+    [self initProductDetail];
+}
+
+-(void)initProductDetail
+{
+
+    [self.view setFrame:CGRectMake(0, 0, 320, self.view.frame.size.height)];
+    
+    [self.view setBackgroundColor:[UIColor colorWithRed:240.0/255.0 green:240.0/255.0 blue:240.0/255.0 alpha:1.0]];
+    //标题栏
+    UIImageView *imageView=[[UIImageView alloc] initWithFrame:CGRectMake(0, 0, 320, 44)];
+    [imageView setImage:[UIImage imageNamed:@"title_bg.png"]];
+    [self.view addSubview:imageView];
+    [imageView release];
+    
+    UIButton *returnBtn=[[UIButton alloc] initWithFrame:CGRectMake(0, 0, 61, 44)];
+    [returnBtn setBackgroundImage:[UIImage imageNamed:@"title_left_btn.png"] forState:UIControlStateNormal];
+    [returnBtn setBackgroundImage:[UIImage imageNamed:@"title_left_btn_sel.png"] forState:UIControlStateHighlighted];
+    [returnBtn addTarget:self action:@selector(returnBtnClicked:) forControlEvents:UIControlEventTouchUpInside];
+    [self.view addSubview:returnBtn];
+    [returnBtn release];
+    
+    UILabel *title=[[UILabel alloc] initWithFrame:CGRectMake(100, 0, 120, 44)];
+    [title setBackgroundColor:[UIColor clearColor]];
+    [title setText:@"商品简介"];
+    [title setTextColor:[UIColor whiteColor]];
+    [title setFont:[UIFont boldSystemFontOfSize:20.0]];
+    [title setTextAlignment:NSTextAlignmentCenter];
+    [title setShadowColor:[UIColor darkGrayColor]];
+    [title setShadowOffset:CGSizeMake(1, -1)];
+    [self.view addSubview:title];
+    [title release];
+    //不是积分则请求数据
+    if (!pointIn)
+    {
+        m_ThreadStatus=THREAD_STATUS_GET_PRODUCT_DETAIL;
+        [self setUpThread:YES];
+    }
+    else
+    {
+        [self updateProductDetail];
+    }
+}
+
+//返回按钮
+-(void)returnBtnClicked:(id)sender
+{
+    [self.view.superview.layer addAnimation:[OTSNaviAnimation animationPushFromLeft] forKey:@"Reveal"];
+    [self removeSelf];
+//    [self popSelfAnimated:YES];
+    if ([superVC isKindOfClass:[PhoneCartViewController class]]) {
+        [superVC viewWillAppear:YES];
+    }
+    if (m_FromTag==PD_FROM_SCAN) {
+        [SharedDelegate enterHomePageRoot];
+    }
+}
+
+//添加收藏
+-(void)favoriteBtnClicked:(id)sender
+{
+    
+    if ([GlobalValue getGlobalValueInstance].ywToken==nil)
+    {
+        [SharedDelegate enterUserManageWithTag:0];
+	}
+    else
+    {
+        if (!m_AddingFavorite)
+        {
+            m_AddingFavorite=YES;
+            
+            __block BOOL result;
+            
+            [self performInThreadBlock:^{
+                NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
+                
+                YWFavoriteService *favSer = [[YWFavoriteService alloc] init];
+                
+                NSDictionary *dic = @{@"pid":m_ProductDetailVO.productId,
+                                      @"userid":[GlobalValue getGlobalValueInstance].userInfo.ecUserId,
+                                      @"username":[GlobalValue getGlobalValueInstance].userInfo.name,
+                                      @"sellerid":m_ProductDetailVO.sellerId,
+                                      @"price":m_ProductDetailVO.price,
+                                      @"token":[GlobalValue getGlobalValueInstance].ywToken,
+                                    };
+                result = [favSer addFavorite:dic];
+                
+//                FavoriteService *fServ=[[[FavoriteService alloc] init] autorelease];
+//                m_AddFavoriteResult=[fServ addFavorite:[GlobalValue getGlobalValueInstance].token tag:nil productId:[NSNumber numberWithLong:m_ProductId]];
+                [pool drain];
+            }completionInMainBlock:^{
+                
+                [TheStoreAppAppDelegate showFavoriteTipWithState:result? 1:0 inView:self.view];
+//                [TheStoreAppAppDelegate showFavoriteTipWithState:m_AddFavoriteResult inView:self.view];
+                m_AddingFavorite=NO;
+            }];
+        }
+    }
+    
+    
+  /* 原版
+   if ([GlobalValue getGlobalValueInstance].token==nil)
+    {
+        [SharedDelegate enterUserManageWithTag:0];
+	}
+    else
+    {
+        if (!m_AddingFavorite)
+        {
+            m_AddingFavorite=YES;
+            
+            [self performInThreadBlock:^{
+                NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
+                FavoriteService *fServ=[[[FavoriteService alloc] init] autorelease];
+                m_AddFavoriteResult=[fServ addFavorite:[GlobalValue getGlobalValueInstance].token tag:nil productId:[NSNumber numberWithLong:m_ProductId]];
+                [pool drain];
+            }completionInMainBlock:^{
+                [TheStoreAppAppDelegate showFavoriteTipWithState:m_AddFavoriteResult inView:self.view];
+                m_AddingFavorite=NO;
+            }];
+        }
+    }*/
+}
+
+//分享
+-(void)shareBtnClicked:(id)sender
+{
+    OTSActionSheet *sheet=[[OTSActionSheet alloc] initWithTitle:nil 
+                                                      delegate:self 
+                                             cancelButtonTitle:@"取消"
+                                        destructiveButtonTitle:nil
+                                             otherButtonTitles:@"分享到新浪微博",@"分享到街旁",@"短信转发",nil];
+    [sheet setTag:ACTION_SHEET_SHARE];
+	[sheet showInView:self.view];
+	[sheet showInView:[UIApplication sharedApplication].keyWindow];
+	[sheet release];
+}
+//原价购买进入
+-(void)cashBuyClick
+{
+    OTSProductDetail *productDetail=[[[OTSProductDetail alloc] initWithProductVO:m_ProductDetailVO fromTag:m_FromTag] autorelease];
+    productDetail.pointIn=YES;
+    [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+    [self pushVC:productDetail animated:YES];
+}
+-(void)updateProductDetail
+{
+    //收藏
+    UIButton *favoriteBtn=[[UIButton alloc] initWithFrame:CGRectMake(240, 0, 40, 44)];
+    [favoriteBtn setBackgroundImage:[UIImage imageNamed:@"title_favorite_noline.png"] forState:UIControlStateNormal];
+    [favoriteBtn setBackgroundImage:[UIImage imageNamed:@"title_favorite_noline_sel.png"] forState:UIControlStateHighlighted];
+    [favoriteBtn addTarget:self action:@selector(favoriteBtnClicked:) forControlEvents:UIControlEventTouchUpInside];
+    [self.view addSubview:favoriteBtn];
+    [favoriteBtn release];
+    
+    //分享
+    UIButton *shareBtn=[[UIButton alloc] initWithFrame:CGRectMake(280, 0, 40, 44)];
+    [shareBtn setBackgroundImage:[UIImage imageNamed:@"title_shared_noline.png"] forState:UIControlStateNormal];
+    [shareBtn setBackgroundImage:[UIImage imageNamed:@"title_shared_noline_sel.png"] forState:UIControlStateHighlighted];
+    [shareBtn addTarget:self action:@selector(shareBtnClicked:) forControlEvents:UIControlEventTouchUpInside];
+    [self.view addSubview:shareBtn];
+    [shareBtn release];
+    
+    m_ScrollView=[[UIScrollView alloc] initWithFrame:CGRectMake(0, 44, 320, self.view.frame.size.height-44.0)];
+    [m_ScrollView setDelegate:self];
+    [self.view addSubview:m_ScrollView];
+    [m_ScrollView setContentSize:CGSizeMake(320, 796)];
+    
+    //顶部
+    OTSProductView *topView=[[OTSProductView alloc] initWithFrame:CGRectMake(0, 0, 320, 270) productVO:m_ProductDetailVO fromTag:m_FromTag];
+    topView.delegate=self;
+//    if (pointIn) {
+        topView.pointProduct=2;
+//    }else{
+//        topView.pointProduct=m_ProductDetailVO.cmsPointProduct.intValue;
+//    }
+
+    //这里检查秒杀状态，换到调用获取商品详情接口之后调用
+//    __block CheckSecKillResult * checkSecKillResult;
+//    if ([m_ProductDetailVO isSeckillProduct]) {
+//        Trader * trader = [GlobalValue getGlobalValueInstance].trader;
+//        NSNumber * provinceId = [GlobalValue getGlobalValueInstance].provinceId;
+//        NSString * promotionId = m_ProductDetailVO.promotionId;
+//        NSNumber * productId = m_ProductDetailVO.productId;
+//        [self performInThreadBlock:^(){
+//            CartService *cService=[[[CartService alloc] init] autorelease];
+//            checkSecKillResult = [[cService checkIfSecKill:trader promotionId:promotionId provinceId:provinceId productId:productId] retain];
+//            
+//        } completionInMainBlock:^()
+//        {
+//            [m_ProductDetailVO setCanSecKill:checkSecKillResult.canSecKill];
+//            [m_ProductDetailVO setIfSecKill:checkSecKillResult.ifSecKill];
+//            [topView refreshView];
+//            [checkSecKillResult release];
+//        }];
+//    }
+//    else 
+//        [topView refreshView];
+    [topView refreshView];
+    [m_ScrollView addSubview:topView];
+    [topView release];
+    
+    //tab切换
+    NSArray *titles;
+//    if ([m_ProductDetailVO.hasGift intValue]==1 || m_ProductDetailVO.isJoinCash || m_ProductDetailVO.offerName.length>0)
+//    {
+//        titles=[NSArray arrayWithObjects:@"商品介绍", @"促销详情", @"同类推荐", nil];
+//    }
+//    else
+//    {
+        titles=[NSArray arrayWithObjects:@"商品介绍",/* @"同类推荐",*/ nil];
+//    }
+    m_TabView=[[OTSTabView alloc] initWithFrame:CGRectMake(0, 270, 320, 37) titles:titles imgtabs:nil delegate:self];
+    [m_ScrollView addSubview:m_TabView];
+    
+    //商品图片
+    UIView *imagesView=[[OTSProductImagesView alloc] initWithFrame:CGRectMake(0, 307, 320, 190) productVO:m_ProductDetailVO];
+    [m_ScrollView addSubview:imagesView];
+    [imagesView release];
+    
+    //商品详情、评价详情
+    UITableView *tableView=[[UITableView alloc] initWithFrame:CGRectMake(0, 498, 320, 103) style:UITableViewStyleGrouped];
+    [tableView setBackgroundColor:[UIColor clearColor]];
+    [tableView setBackgroundView:nil];
+    [tableView setScrollEnabled:NO];
+    [tableView setDelegate:self];
+    [tableView setDataSource:self];
+    [m_ScrollView addSubview:tableView];
+    [tableView release];
+    
+    //促销
+//    OTSAnimationTableView *animationTableView=[[OTSAnimationTableView alloc] initWithFrame:CGRectMake(0, 608, 320, 50) style:UITableViewStyleGrouped productVO:m_ProductDetailVO delegate:self];
+//    [m_ScrollView addSubview:animationTableView];
+//    [animationTableView release];
+    
+    //感兴趣商品
+//    m_InterestedProducts=[[OTSInterestedProducts alloc] initWithFrame:CGRectMake(0, 608, 320, 225) productVO:m_ProductDetailVO delegate:self];
+//    [m_ScrollView addSubview:m_InterestedProducts];
+    
+    [m_ScrollView bringSubviewToFront:m_TabView];
+}
+
+//商品简介为空
+-(void)showNotFindProduct
+{
+    UIAlertView *alertView=[[UIAlertView alloc] initWithTitle:nil message:@"无法打开商品简介" delegate:self cancelButtonTitle:@"确定" otherButtonTitles:nil];
+    [alertView show];
+    [alertView release];
+}
+
+//进入商品描述
+-(void)enterProductDescribe
+{
+    OTSProductDescriptionView *descriptionView=[[OTSProductDescriptionView alloc] initWithFrame:CGRectMake(0, 0, 320, self.view.frame.size.height) productVO:m_ProductDetailVO];
+    [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+    [self.view addSubview:descriptionView];
+    [descriptionView release];
+}
+
+//进入评价详情 改版
+
+//-(void)enterCommentDetail
+//{
+//    [self removeSubControllerClass:[OTSProductCommentViewV2 class]];
+//    OTSProductCommentViewV2 *commentViewV3=[[[OTSProductCommentViewV2 alloc] init] autorelease];
+//    [commentViewV3 setProductVO:m_ProductDetailVO];
+//    [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+//    [self pushVC:commentViewV3 animated:YES];
+//}
+
+
+//进入评价详情
+
+-(void)enterCommentDetail
+{
+    OTSProductCommentView *commentView=[[OTSProductCommentView alloc] initWithFrame:CGRectMake(0, 0, 320, self.view.frame.size.height) productVO:m_ProductDetailVO];
+    [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+    [self.view addSubview:commentView];
+    [commentView release];
+}
+ 
+
+#pragma mark - 线程
+-(void)setUpThread:(BOOL)showLoading
+{
+    if (!m_ThreadRunning) {
+        m_ThreadRunning=YES;
+        if (showLoading) {
+            [self showLoading:YES];
+        }
+        [self otsDetatchMemorySafeNewThreadSelector:@selector(startThread) toTarget:self withObject:nil];
+    }
+}
+
+-(void)startThread
+{
+    while (m_ThreadRunning) {
+        @synchronized(self) {
+            switch (m_ThreadStatus) {
+                case THREAD_STATUS_GET_PRODUCT_DETAIL: {
+                    [self newThreadGetProductDetail];
+                    [self stopThread];
+                    break;
+                }
+                case THREAD_STATUS_GET_DESCRIPTION: {//获取商品描述进入商品描述
+                    [self newThreadGetDescription];
+                    [self performSelectorOnMainThread:@selector(enterProductDescribe) withObject:nil waitUntilDone:NO];
+                    [self stopThread];
+                    break;
+                }
+                case THREAD_STATUS_GET_COMMENT: {//获取商品评论进入商品评论
+                    [self newThreadGetComment];
+                    [self performSelectorOnMainThread:@selector(enterCommentDetail) withObject:nil waitUntilDone:NO];
+                    [self stopThread];
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+    }
+}
+
+-(void)stopThread
+{
+    m_ThreadRunning=NO;
+    m_ThreadStatus=-1;
+    [self hideLoading];
+}
+
+-(void)newThreadGetProductDetail
+{
+    
+    
+    NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
+    YWProductService *pServ=[[YWProductService alloc] init];
+    ProductInfo *tempProductVO = nil;
+    @try {
+//        tempProductVO=[pServ getProductDetail:[GlobalValue getGlobalValueInstance].trader productId:[NSNumber numberWithLong:m_ProductId] provinceId:[GlobalValue getGlobalValueInstance].provinceId promotionid:m_PromotionId];
+        
+        NSDictionary *param = @{@"itemcode":[NSString stringWithFormat:@"%ld", m_ProductId], @"flag":@"3"};
+        tempProductVO = [pServ getProductDetail:param];
+        
+        
+    }
+    @catch (NSException *exception) {
+    }
+    @finally {
+        if (m_ProductDetailVO!=nil)
+        {
+            [m_ProductDetailVO release];
+        }
+        if (tempProductVO!=nil && ![tempProductVO isKindOfClass:[NSNull class]] /*&& tempProductVO.name!=nil && ![tempProductVO.name isEqualToString:@""]*/)
+        {
+            m_ProductDetailVO=[tempProductVO retain];
+            
+//            if (m_ProductDetailVO.promotionPrice == nil)
+//            {
+//                m_ProductDetailVO.promotionPrice = self.promotionPrice;
+//            }
+            
+//            if ([m_ProductDetailVO isSeckillProduct])
+//            { // 是秒杀商品刷新秒杀状态
+//                CheckSecKillResult* checkSecKillResult;
+//                Trader * trader = [GlobalValue getGlobalValueInstance].trader;
+//                NSNumber * provinceId = [GlobalValue getGlobalValueInstance].provinceId;
+//                NSString * promotionId = m_ProductDetailVO.promotionId;
+//                NSNumber * productId = m_ProductDetailVO.productId;
+//                CartService *cService=[[[CartService alloc] init] autorelease];
+//                
+//                @try {
+//                    checkSecKillResult = [[cService checkIfSecKill:trader promotionId:promotionId provinceId:provinceId productId:productId] retain];
+//                }
+//                @catch (NSException *exception) {
+//                }
+//                @finally {
+//                    [m_ProductDetailVO setCanSecKill:checkSecKillResult.canSecKill];
+//                    [m_ProductDetailVO setIfSecKill:checkSecKillResult.ifSecKill];
+//                    [checkSecKillResult release];
+//                }
+//            }
+//
+            //不是积分商品
+            [self performSelectorOnMainThread:@selector(updateProductDetail) withObject:nil waitUntilDone:NO];
+//            [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadGetDescription) toTarget:self withObject:nil];
+//            [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadGetComment) toTarget:self withObject:nil];
+//            [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadAddBrowse) toTarget:self withObject:nil];
+            
+            
+        }
+        else
+        {
+            m_ProductDetailVO=nil;
+            [self performSelectorOnMainThread:@selector(showNotFindProduct) withObject:nil waitUntilDone:NO];
+        }
+    }
+    [pServ release];
+    [pool drain];
+    
+    
+    
+//    1号店原版
+    /*
+    NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
+    ProductService *pServ=[[ProductService alloc] init];
+    ProductVO *tempProductVO=nil;
+    @try {
+        tempProductVO=[pServ getProductDetail:[GlobalValue getGlobalValueInstance].trader productId:[NSNumber numberWithLong:m_ProductId] provinceId:[GlobalValue getGlobalValueInstance].provinceId promotionid:m_PromotionId];
+    }
+    @catch (NSException *exception) {
+    }
+    @finally {
+        if (m_ProductDetailVO!=nil) {
+            [m_ProductDetailVO release];
+        }
+        if (tempProductVO!=nil && ![tempProductVO isKindOfClass:[NSNull class]] && tempProductVO.cnName!=nil && ![tempProductVO.cnName isEqualToString:@""]) {
+            m_ProductDetailVO=[tempProductVO retain];
+            
+            if (m_ProductDetailVO.promotionPrice == nil)
+            {
+                m_ProductDetailVO.promotionPrice = self.promotionPrice;
+            }
+            
+            if ([m_ProductDetailVO isSeckillProduct]) { // 是秒杀商品刷新秒杀状态
+                CheckSecKillResult* checkSecKillResult;
+                Trader * trader = [GlobalValue getGlobalValueInstance].trader;
+                NSNumber * provinceId = [GlobalValue getGlobalValueInstance].provinceId;
+                NSString * promotionId = m_ProductDetailVO.promotionId;
+                NSNumber * productId = m_ProductDetailVO.productId;
+                CartService *cService=[[[CartService alloc] init] autorelease];
+                
+                @try {
+                    checkSecKillResult = [[cService checkIfSecKill:trader promotionId:promotionId provinceId:provinceId productId:productId] retain];
+                }
+                @catch (NSException *exception) {
+                }
+                @finally {
+                    [m_ProductDetailVO setCanSecKill:checkSecKillResult.canSecKill];
+                    [m_ProductDetailVO setIfSecKill:checkSecKillResult.ifSecKill];
+                    [checkSecKillResult release];
+                }
+            }
+            
+            //不是积分商品
+            [self performSelectorOnMainThread:@selector(updateProductDetail) withObject:nil waitUntilDone:NO];
+            [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadGetDescription) toTarget:self withObject:nil];
+            [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadGetComment) toTarget:self withObject:nil];
+            [self otsDetatchMemorySafeNewThreadSelector:@selector(newThreadAddBrowse) toTarget:self withObject:nil];
+
+            
+        } else {
+            m_ProductDetailVO=nil;
+            [self performSelectorOnMainThread:@selector(showNotFindProduct) withObject:nil waitUntilDone:NO];
+        }
+    }
+    [pServ release];
+    [pool drain];*/
+}
+
+-(void)newThreadGetDescription
+{
+    /*
+    NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
+    ProductService *describeServ=[[[ProductService alloc] init] autorelease];
+    ProductVO *tempDescriptionVO=nil;
+    @try {
+        tempDescriptionVO=[describeServ getProductDetailDescription:[GlobalValue getGlobalValueInstance].trader productId:m_ProductDetailVO.productId provinceId:[GlobalValue getGlobalValueInstance].provinceId];
+    }
+    @catch (NSException *exception) {
+    }
+    @finally {
+        if (tempDescriptionVO!=nil && ![tempDescriptionVO isKindOfClass:[NSNull class]]) {
+            [m_ProductDetailVO setDescription:tempDescriptionVO.description];
+        } else {
+            [m_ProductDetailVO setDescription:@"对不起，此产品没有描述信息！"];
+        }
+    }
+    [pool drain];
+     */
+    
+}
+
+-(void)newThreadGetComment
+{
+    NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
+    YWProductService *pServ=[[[YWProductService alloc] init] autorelease];
+//    ProductVO *detailCommentVO=nil;
+    NSMutableArray *commentList ;
+    @try
+    {
+        NSDictionary *dic = @{@"pageindex" : @"1",@"pagesize":@"20",@"itemcode":m_ProductDetailVO.productId};
+        commentList = [pServ getProductCommentList:dic];
+       
+//        detailCommentVO=[pServ getProductDetailComment:[GlobalValue getGlobalValueInstance].trader productId:m_ProductDetailVO.productId provinceId:[GlobalValue getGlobalValueInstance].provinceId];
+    }
+    @catch (NSException *exception) {
+    }
+    @finally {
+//        if (detailCommentVO!=nil && ![detailCommentVO isKindOfClass:[NSNull class]]) {
+//            [m_ProductDetailVO setRating:detailCommentVO.rating];
+//        } else {
+//            [m_ProductDetailVO setRating:nil];
+//        }
+        
+         m_ProductDetailVO.commentList = commentList;
+    }
+    [pool drain];
+}
+
+-(void)newThreadAddBrowse
+{
+    /*
+    NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
+    BrowseService *bServ=[[[BrowseService alloc] init] autorelease];
+    int rowcount = [bServ queryBrowseHistoryByIdCount:[NSNumber numberWithLong:m_ProductId]];
+    @try {
+        if (rowcount) {
+            //productid存在则更新
+            [bServ updateBrowseHistory:m_ProductDetailVO provice:PROVINCE_ID];
+        }
+        else {
+            [bServ saveBrowseHistory:m_ProductDetailVO province:PROVINCE_ID];
+        }
+    }
+    @catch (NSException *exception) {
+     
+    }
+    @finally {
+        
+    }
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"RefleshImmediately" object:nil];
+    [pool drain];
+     */
+}
+
+#pragma mark - UITableView相关
+-(void)tableView:(UITableView * )tableView didSelectRowAtIndexPath:(NSIndexPath * )indexPath {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    switch ([indexPath row]) {
+        case 0: {//商品详情
+//            if ([m_ProductDetailVO description]==nil || [[m_ProductDetailVO description] length]==0) {
+//                m_ThreadStatus=THREAD_STATUS_GET_DESCRIPTION;
+//                [self setUpThread:YES];
+//            } else {
+                [self enterProductDescribe];
+//            }
+            break;
+        }
+        case 1: {//评价详情
+            if (m_ProductDetailVO.commentList.count == 0)
+            {
+                m_ThreadStatus=THREAD_STATUS_GET_COMMENT;
+                [self setUpThread:YES];
+            }
+            else
+            {
+                [self enterCommentDetail];
+            }
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+-(NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    return 2;
+}
+
+-(UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {	
+    UITableViewCell *cell=[[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil] autorelease];
+    [cell setBackgroundColor:[UIColor whiteColor]];
+    switch (indexPath.row) {
+        case 0:
+            [[cell textLabel] setText:@"商品详情"];
+            break;
+        case 1:
+            [[cell textLabel] setText:@"评价详情"];
+            break;
+        default:
+            break;
+    }
+    [[cell textLabel] setFont:[UIFont systemFontOfSize:15.0]];
+    cell.selectionStyle=UITableViewCellSelectionStyleBlue;
+    cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
+    return cell;
+}
+
+-(CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+    return 44.0;
+}
+
+#pragma mark - UIScrollView相关delegate
+-(void)scrollViewDidScroll:(UIScrollView *)scrollView
+{
+    if (scrollView.contentOffset.y>270.0) {
+        [m_TabView setFrame:CGRectMake(0, scrollView.contentOffset.y, 320, 37)];
+    } else {
+        [m_TabView setFrame:CGRectMake(0, 270.0, 320, 37)];
+    }
+}
+
+#pragma mark - UIActionSheet相关delegate
+- (void)actionSheet:(UIActionSheet *)actionSheet didDismissWithButtonIndex:(NSInteger)buttonIndex
+{
+    switch ([actionSheet tag]) {
+        case ACTION_SHEET_SHARE: {
+            if (buttonIndex==0) {
+                [[OTSShare sharedInstance] shareToBlogWithProduct:m_ProductDetailVO delegate:self];
+            } else if (buttonIndex==1) {
+                [[OTSShare sharedInstance] shareToJiePangWithProduct:m_ProductDetailVO delegate:self];
+            } else if (buttonIndex==2) {
+                [[OTSShare sharedInstance] shareToMessageWithProduct:m_ProductDetailVO delegate:self];
+            }
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+#pragma mark - UIAlerViewDelegate
+- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex
+{
+    [self returnBtnClicked:nil];
+}
+
+#pragma mark - OTSTabView相关delegate
+-(void)tabClickedAtIndex:(NSNumber *)index
+{
+    switch ([index intValue]) {
+        case 0: {
+            CGFloat yValue=270.0;
+            if (m_ScrollView.contentSize.height-m_ScrollView.frame.size.height<yValue) {
+                yValue=m_ScrollView.contentSize.height-m_ScrollView.frame.size.height;
+            }
+            [m_ScrollView setContentOffset:CGPointMake(0, yValue) animated:YES];
+            break;
+        }
+        case 1: {
+            CGFloat yValue=563.0;
+            if (m_ScrollView.contentSize.height-m_ScrollView.frame.size.height<yValue) {
+                yValue=m_ScrollView.contentSize.height-m_ScrollView.frame.size.height;
+            }
+            [m_ScrollView setContentOffset:CGPointMake(0, yValue) animated:YES];
+            break;
+        }
+        case 2: {
+            CGFloat yValue=m_ScrollView.contentSize.height-m_ScrollView.frame.size.height;
+            [m_ScrollView setContentOffset:CGPointMake(0, yValue) animated:YES];
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+#pragma mark - OTSAnimationTableView相关delegate
+-(void)promotionTableSizeChanged:(OTSAnimationTableView *)animationTableView
+{
+    CGFloat yValue=608+animationTableView.frame.size.height;
+    [m_InterestedProducts setFrame:CGRectMake(0, yValue, 320, m_InterestedProducts.frame.size.height)];
+    [m_ScrollView setContentSize:CGSizeMake(320, yValue+m_InterestedProducts.frame.size.height)];
+}
+
+-(void)enterCashList:(MobilePromotionVO *)mobilePromotionVO
+{
+    CategoryProductsViewController *cateProduct = [[[CategoryProductsViewController alloc] init] autorelease] ;
+    [cateProduct setCateId:[NSNumber numberWithInt:0]];
+    [cateProduct setTitleLableText:mobilePromotionVO.title];
+    [cateProduct setTitleText:@"全部"];
+    [cateProduct setCanJoin:[mobilePromotionVO canJoin]];
+    [cateProduct setPromotionId:mobilePromotionVO.promotionId];
+    [cateProduct setIsCashPromotionList:YES];
+    [cateProduct setIsFailSatisfyFullDiscount:YES];
+    [self pushVC:cateProduct animated:YES fullScreen:YES];
+}
+
+-(void)enterNNList:(MobilePromotionVO *)mobilePromotionVO
+{
+    [self removeSubControllerClass:[OTSNNPiecesVC class]];
+    OTSNNPiecesVC* vc = [[[OTSNNPiecesVC alloc] init] autorelease];
+    [vc setPromotionId:mobilePromotionVO.promotionId];
+    [vc setPromotionLevelId:mobilePromotionVO.promotionLevelId];
+    [vc setNnpiecesTitle:mobilePromotionVO.title];
+    [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+    [self pushVC:vc animated:YES];
+}
+
+#pragma mark - OTSInterestedProducts相关delegate
+-(void)interestedProductClicked:(ProductVO *)productVO
+{
+    if (!productVO.isYihaodian.intValue) {
+        NSString *urlStr = @"http://m.1mall.com/mw/product/";
+        NSNumber *productId = productVO.productId;
+        NSNumber *areaId = [GlobalValue getGlobalValueInstance].provinceId;
+        if ([GlobalValue getGlobalValueInstance].token == nil) {
+            urlStr = [urlStr stringByAppendingFormat:@"%@/%@/?osType=%d",productId,areaId,30];
+        } else {
+            // 对 token 进行base64加密
+            NSData *b64Data = [GTMBase64 encodeData:[[GlobalValue getGlobalValueInstance].token dataUsingEncoding:NSUTF8StringEncoding]];
+            NSString *b64Str = [[[NSString alloc] initWithData:b64Data encoding:NSUTF8StringEncoding] autorelease];
+            urlStr = [urlStr stringByAppendingFormat:@"%@/%@/?osType=%d&token=%@",productId,areaId,30,b64Str];
+        }
+        DebugLog(@"enterWap -- url is:\n%@",urlStr);
+        [SharedDelegate enterWap:1 invokeUrl:urlStr isClearCookie:NO];
+
+    }else{
+        OTSProductDetail *productDetail=[[[OTSProductDetail alloc] initWithProductId:[productVO.productId longValue] promotionId:productVO.promotionId fromTag:PD_FROM_OTHER] autorelease];
+        productDetail.superVC=self;
+        [self.view.layer addAnimation:[OTSNaviAnimation animationPushFromRight] forKey:@"Reveal"];
+        [self pushVC:productDetail animated:YES];
+    }
+}
+
+-(void)interestedProductIsNull:(OTSInterestedProducts *)interestedProducts;
+{
+    [m_ScrollView setContentSize:CGSizeMake(320, m_ScrollView.contentSize.height-225)];
+}
+
+-(void)releaseResource
+{
+    OTS_SAFE_RELEASE(m_PromotionId);
+    OTS_SAFE_RELEASE(m_ProductDetailVO);
+    OTS_SAFE_RELEASE(m_InterestedProducts);
+    OTS_SAFE_RELEASE(m_ScrollView);
+    OTS_SAFE_RELEASE(m_TabView);
+}
+
+- (void)viewDidUnload
+{
+    [self releaseResource];
+    [super viewDidUnload];
+    // Release any retained subviews of the main view.
+    // e.g. self.myOutlet = nil;
+}
+
+-(void)dealloc
+{
+    [self releaseResource];
+    [_promotionPrice release];
+    [superVC release];
+    [super dealloc];
+}
+
+- (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation
+{
+    // Return YES for supported orientations
+    return (interfaceOrientation == UIInterfaceOrientationPortrait);
+}
+
+@end

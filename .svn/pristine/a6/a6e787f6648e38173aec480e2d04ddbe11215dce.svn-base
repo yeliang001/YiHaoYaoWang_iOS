@@ -1,0 +1,144 @@
+//
+//  YWUserLoginHelper.m
+//  TheStoreApp
+//
+//  Created by LinPan on 13-8-15.
+//
+//
+
+#import "YWUserLoginHelper.h"
+#import "YWUserService.h"
+#import "LoginResultInfo.h"
+#import "GlobalValue.h"
+@implementation YWUserLoginHelper
+
++ (YWUserLoginHelper *)sharedInstance
+{
+    static YWUserLoginHelper *sharedInstance = nil;
+    @synchronized(self)
+    {
+        if (sharedInstance == nil)
+        {
+            sharedInstance = [[self alloc] init];
+        }
+    }
+    
+    return sharedInstance;
+}
+
+
+
+- (void)dealloc
+{
+    [_loginResult release];
+    [super dealloc];
+}
+
+
+- (BOOL)isLoginSuccess
+{
+    return self.loginResult.responseCode == 200 && self.loginResult.resultCode == 1;
+}
+
+- (BOOL)isNilResult
+{
+    return self.loginResult.userInfo == nil;
+}
+
+- (BOOL)isResultHasError
+{
+    return self.loginResult.responseCode!=200 || self.loginResult.bRequestStatus == NO;
+}
+
+
+
+- (BOOL)loginWithType:(YWLoginType)aLoginType param:(NSDictionary *)aParam
+{
+    @synchronized(self)
+    {
+        // 初始化
+        self.loginResult = nil;
+        
+        // 接口调用
+        switch (aLoginType)
+        {
+            case kYWLoginStore:
+            {
+                YWUserService *userSer = [[[YWUserService alloc] init] autorelease];
+                self.loginResult = [userSer login:aParam];
+            }
+            break;
+                
+            case kYWLoginUnion:
+            {
+//                NSString *resultStr = [[OTSServiceHelper sharedInstance]
+//                                       unionLogin:[GlobalValue getGlobalValueInstance].trader
+//                                       provinceId:[GlobalValue getGlobalValueInstance].provinceId
+//                                       userName:aParam.userName
+//                                       realUserName:aParam.realuserName
+//                                       cocode:aParam.cocode];
+//                
+//                // 模拟LoginResult
+//                if (resultStr)
+//                {
+//                    self.loginResult = [[[LoginResult alloc] init] autorelease];
+//                    
+//                    if ([resultStr isEqualToString:@"-1"] || [resultStr isEqualToString:@"-2"])
+//                    {
+//                        int resultInt = [resultStr intValue];
+//                        self.loginResult.resultCode = [NSNumber numberWithInt:resultInt];
+//                        
+//                        if (resultInt == -1)
+//                        {
+//                            self.loginResult.errorInfo = @"用户名不正确";
+//                        }
+//                        else if (resultInt == -2)
+//                        {
+//                            self.loginResult.errorInfo = @"密码不正确";
+//                        }
+//                        
+//                    }
+//                    else
+//                    {
+//                        self.loginResult.token = resultStr;
+//                        self.loginResult.resultCode = [NSNumber numberWithInt:1];
+//                    }
+//                }
+            }
+                break;
+                
+            default:
+                break;
+        }
+        
+        // 结果处理
+        if (self.isLoginSuccess)
+        {
+            {
+                //linpan 加入
+                [GlobalValue getGlobalValueInstance].ywToken = self.loginResult.token;
+                [GlobalValue getGlobalValueInstance].userInfo = self.loginResult.userInfo;
+                
+                [[OTSUserSwitcher sharedInstance] justSwitchToStoreUserWithToken:self.loginResult.token];
+                [self performSelectorOnMainThread:@selector(loginSuccessNotification) withObject:nil waitUntilDone:NO];
+            }
+//            [[OTSOnlinePayNotifier sharedInstance] retrieveOrders];
+        }
+        else
+        {
+            [GlobalValue getGlobalValueInstance].storeToken = nil;
+        }
+
+        
+        return [self isLoginSuccess];
+    }
+}
+
+- (void)loginSuccessNotification
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:NOTIFY_LOGIN_SUCCESS object:nil];
+}
+
+@end
+
+

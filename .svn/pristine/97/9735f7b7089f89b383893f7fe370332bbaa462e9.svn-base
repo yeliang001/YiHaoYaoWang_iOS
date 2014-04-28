@@ -1,0 +1,103 @@
+==========================================
+Title: view controller 内存管理机制
+Created By: 董一鸣
+Created On: 2012.6.25.
+Modified On: 2012.6.28. // OTSAlertView和OTSActionSheet说明
+===========================================
+
+view controller 内存管理机制
+
+目前代码中没有采用系统导航方式，而是通过addSubView和removeFromSuperview加上动画，模拟标准导航方式。但是view controller在退出界面后不能被及时清理，所以很多地方都将其作为成员变量，从而导致了大量的view controller得不到释放，占用了宝贵的内存资源。
+
+==================目的：===========================
+实现对view controller内存的动态管理
+
+==================原理：==============================
+在每个view Controller初始化时，将其实例指针retain到manager类；
+在view退出时，通知manager释放此view Controller。
+这样就能及时对view Contoller的内存进行清理。
+
+===============类设计：=======================
+(注：以下将view controller简称为vc)
+
+OTSViewControllerManager
+这个类是vc的管理者，本身是singleton，其内部维护了一个vc的动态数组。
+创建vc时都要注册到管理者，而退出vc后需要反注册。
+
+OTSBaseViewController
+UIViewController的子类，也是所有需要使用内存管理的vc必须继承的类。
+此类会在其init方法中向OTSViewControllerManager注册自己，而在退出视图时向OTSViewControllerManager反注册自己。
+OTSBaseViewController还会将自己的tag设置为和类名相关的唯一id，方便manager进行管理。
+
+
+UIView (VCManage)
+是UIView的Category，主要用于在非vc的类中，对vc进行释放。
+
+===============用法：=====================
+1.实现OTSBaseViewController子类
+首先，使用者在创建vc时继承OTSBaseViewController。
+
+然后，你要为新的vc类创建唯一的id，作为view的tag，你需要:
+
+向EOTSVCTag枚举中添加一项，比如KOTSVCTag_YourClass
+typedef enum _EOTSVCTag
+{
+    KOTSVCTag_BEGIN = 100000    // 开始标志
+    
+    , KOTSVCTag_AccountBalance
+    , KOTSVCTag_Activity
+    , KOTSVCTag_AdvertisementDetail
+    ....
+        , KOTSVCTag_ZBarReaderViewController
+        //,KOTSVCTag_YourClass                                      《====加到这里
+    
+    , KOTSVCTag_END         // 结束标志
+}EOTSVCTag;
+
+然后，为OTSBaseViewController的tagForRootViewByClass方法添加新的case
++(int)tagForRootViewByClass:(Class)aViewControllerClass
+{
+    NSString* classNameStr = [aViewControllerClass description];
+    EOTSVCTag retTag = KOTSVCTag_BEGIN;
+    
+    if ([classNameStr isEqualToString:@"AccountBalance"])
+    {
+        retTag = KOTSVCTag_AccountBalance;
+    }
+    
+    ...
+    
+    if ([classNameStr isEqualToString:@"YourClass"])    《====加到这里
+    {
+        retTag = KOTSVCTag_YourClass;
+    }
+    
+    return retTag;
+}
+
+2.vc实例化
+没有特别的用法，OTSBaseViewController的子类会自动进行注册
+
+3.vc释放
+原来是直接remove from superView，现在因为加入了内存管理而有所不同，有几种不同的case：
+
+如果退出自己，调用
+-(void)removeSelf;  // 此方法会递归释放subView的view controller
+
+如果是在vc中退出其他vc，可以调用OTSBaseViewController的实例方法：
+-(void)removeSubControllerClass:(Class)aViewControllerClass;  // 将指定vc类的view从自身view移除，并反注册该类
+参数aViewControllerClass为vc的Class
+
+如果是在UIView中对vc进行释放（这种情况应该避免，不过原来的代码中确实有），需要调用UIView (VCManage)的：
+-(void)removeSubControllerClass:(Class)aViewControllerClass;
+参数aViewControllerClass为vc的Class
+
+======================================================================
+以上是vc内存管理机制的基本原理和用法，今后创建vc时，建议使用此机制进行管理。
+一般不建议将vc作为成员变量保存下来，而是作为autorelease的对象，由vc的manager代为管理。
+
+由于对vc进行了实时释放，内存稳定值从之前的14.5，降到10左右，效果还不错。
+经过我初步测试没有什么问题，如果大家发现有问题，可以随时通知我。
+
+-----------------------2012.6.28.updated----------------------
+在使用内存管理的vc内，如果你要使用alert view 和 action sheet，请使用OTSAlertView和OTSActionSheet，这两个类分别是UIAlertView和UIActionSheet的子类，其内部会添加为内存管理移除VC事件通知的observer，以便及时将其delegate置为nil，避免在vc被释放后，对象还持有vc的回调指针导致crash。
